@@ -9,9 +9,20 @@ import (
 )
 
 type TelegramUpdate struct {
-	UpdateID        int `json:"update_id"`
+	UpdateID int `json:"update_id"`
+	Message  struct {
+		MessageID int `json:"message_id"`
+		Chat      struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+		From struct {
+			ID int64 `json:"id"`
+		} `json:"from"`
+		Text string `json:"text"`
+	} `json:"message"`
 	BusinessMessage struct {
 		MessageID            int    `json:"message_id"`
+		IsOutgoing           bool   `json:"is_outgoing"`
 		BusinessConnectionID string `json:"business_connection_id"`
 		Chat                 struct {
 			ID int64 `json:"id"`
@@ -23,21 +34,8 @@ type TelegramUpdate struct {
 		} `json:"from"`
 		Text string `json:"text"`
 	} `json:"business_message"`
-	Message struct {
-		Chat struct {
-			ID int64 `json:"id"`
-		} `json:"chat"`
-		Text string `json:"text"`
-	} `json:"message"`
 }
 
-type SendMessagePayload struct {
-	ChatID               int64  `json:"chat_id"`
-	Text                 string `json:"text"`
-	BusinessConnectionID string `json:"business_connection_id,omitempty"`
-}
-
-// تخزين حالة الإيقاف والتشغيل العامة للبوت
 var isBotStopped = false
 
 func Handler(w http.ResponseWriter, r *http.Request) {
@@ -55,25 +53,23 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	var update TelegramUpdate
 	err := json.NewDecoder(r.Body).Decode(&update)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
 	apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
 
-	// 1. التحكم المباشر عبر مراسلة البوت الخاص بك (Bot Chat)
+	// 1. استقبال الأوامر المباشرة داخل محادثة البوت (/stop أو /start_bot)
 	if update.Message.Text != "" {
 		cmd := strings.TrimSpace(update.Message.Text)
 		chatID := update.Message.Chat.ID
 
 		if cmd == "/stop" {
 			isBotStopped = true
-			replyText := "🛑 تم إيقاف الرد التلقائي العام."
-			sendSimpleMessage(apiURL, chatID, replyText)
+			sendSimpleMessage(apiURL, chatID, "🛑 تم إيقاف الرد التلقائي.")
 		} else if cmd == "/start_bot" {
 			isBotStopped = false
-			replyText := "🟢 تم تفعيل الرد التلقائي العام."
-			sendSimpleMessage(apiURL, chatID, replyText)
+			sendSimpleMessage(apiURL, chatID, "🟢 تم تفعيل الرد التلقائي.")
 		}
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
@@ -95,10 +91,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 		replyText := "مرحبا بك يا " + senderName + "\nانا غير متوفر الان يرجى ترك رسالتك\nوسأرد عليك قريبا"
 
-		payload := SendMessagePayload{
-			ChatID:               chat,
-			Text:                 replyText,
-			BusinessConnectionID: msg.BusinessConnectionID,
+		payload := map[string]interface{}{
+			"chat_id":                chat,
+			"text":                   replyText,
+			"business_connection_id": msg.BusinessConnectionID,
 		}
 
 		jsonPayload, _ := json.Marshal(payload)
