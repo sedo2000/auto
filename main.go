@@ -1,28 +1,43 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
+	"os"
 )
 
-// هيكل بيانات رسالة تلجرام البسيطة (Business Message)
 type TelegramUpdate struct {
 	UpdateID int `json:"update_id"`
 	BusinessMessage struct {
 		MessageID int `json:"message_id"`
-		From struct {
+		Chat struct {
 			ID int64 `json:"id"`
+		} `json:"chat"`
+		From struct {
+			ID        int64  `json:"id"`
 			FirstName string `json:"first_name"`
 		} `json:"from"`
-		Text string `json:"text"`
+		Text                 string `json:"text"`
 		BusinessConnectionID string `json:"business_connection_id"`
 	} `json:"business_message"`
 }
 
-// دالة الـ Handler التي تستقبل طلبات Vercel (Serverless Function)
+type SendMessagePayload struct {
+	ChatID               int64  `json:"chat_id"`
+	Text                 string `json:"text"`
+	BusinessConnectionID string `json:"business_connection_id,omitempty"`
+}
+
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
+		http.Error(w, "Bot token not configured", http.StatusInternalServerError)
 		return
 	}
 
@@ -33,11 +48,26 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// تحقق من وجود رسالة أعمال واردة ورّد عليها
+	// تحقق من أن الرسالة الواردة تحتوي على نص
 	if update.BusinessMessage.Text != "" {
-		// هنا يمكنك كتابة منطق الرد التلقائي باستخدام Telegram Bot API
-		// عن طريق إرسال طلب HTTP POST إلى:
-		// https://api.telegram.org/bot<TOKEN>/sendMessage
+		chat := update.BusinessMessage.Chat.ID
+		if chat == 0 {
+			chat = update.BusinessMessage.From.ID
+		}
+
+		// تجهيز الرد
+		replyText := "مرحباً! لقد تلقيت رسالتك بشكل آلي."
+		payload := SendMessagePayload{
+			ChatID:               chat,
+			Text:                 replyText,
+			BusinessConnectionID: update.BusinessMessage.BusinessConnectionID,
+		}
+
+		jsonPayload, _ := json.Marshal(payload)
+
+		// إرسال الطلب إلى Telegram API
+		apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
+		http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
 	}
 
 	w.WriteHeader(http.StatusOK)
