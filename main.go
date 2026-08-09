@@ -12,7 +12,6 @@ type TelegramUpdate struct {
 	UpdateID        int `json:"update_id"`
 	BusinessMessage struct {
 		MessageID            int    `json:"message_id"`
-		IsOutgoing           bool   `json:"is_outgoing"`
 		BusinessConnectionID string `json:"business_connection_id"`
 		Chat                 struct {
 			ID int64 `json:"id"`
@@ -24,6 +23,12 @@ type TelegramUpdate struct {
 		} `json:"from"`
 		Text string `json:"text"`
 	} `json:"business_message"`
+	Message struct {
+		Chat struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+		Text string `json:"text"`
+	} `json:"message"`
 }
 
 type SendMessagePayload struct {
@@ -32,14 +37,8 @@ type SendMessagePayload struct {
 	BusinessConnectionID string `json:"business_connection_id,omitempty"`
 }
 
-type DeleteMessagePayload struct {
-	ChatID    int64 `json:"chat_id"`
-	MessageID int   `json:"message_id"`
-}
-
-// تخزين مؤقت لحالة المحادثات المتوقفة (مفتاح خارجي لرقم المحادثة)
-// ملاحظة: في بيئة السيرفرليس قد تُعاد ذاكرة الكود، ولكنها تفيد في الجلسات النشطة
-var stoppedChats = make(map[int64]bool)
+// تخزين حالة الإيقاف والتشغيل العامة للبوت
+var isBotStopped = false
 
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -60,43 +59,35 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := update.BusinessMessage
-	chat := msg.Chat.ID
-	if chat == 0 {
-		chat = msg.From.ID
+	apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
+
+	// 1. التحكم المباشر عبر مراسلة البوت الخاص بك (Bot Chat)
+	if update.Message.Text != "" {
+		cmd := strings.TrimSpace(update.Message.Text)
+		chatID := update.Message.Chat.ID
+
+		if cmd == "/stop" {
+			isBotStopped = true
+			replyText := "🛑 تم إيقاف الرد التلقائي العام."
+			sendSimpleMessage(apiURL, chatID, replyText)
+		} else if cmd == "/start_bot" {
+			isBotStopped = false
+			replyText := "🟢 تم تفعيل الرد التلقائي العام."
+			sendSimpleMessage(apiURL, chatID, replyText)
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+		return
 	}
 
-	// 1. إذا كانت الرسالة صادرة منك أنت (أوامر التحكم أو الردود العادية)
-	if msg.IsOutgoing {
-		textTrimmed := strings.TrimSpace(msg.Text)
-
-		// إذا أرسلت أنت كلمة "إيقاف"
-		if textTrimmed == "إيقاف" {
-			stoppedChats[chat] = true
-			deleteMessage(botToken, chat, msg.MessageID)
-		} else if textTrimmed == "تشغيل" {
-			// إذا أرسلت أنت كلمة "تشغيل"
-			delete(stoppedChats, chat)
-			deleteMessage(botToken, chat, msg.MessageID)
-		} else {
-			// أي رسالة عادية ترد بها أنت على الشخص، سيقوم البوت تلقائياً بإيقاف الرد الآلي مؤقتاً لهذه المحادثة وحذف الحاجة لتكرار الرد
-			stoppedChats[chat] = true
+	// 2. الرد على رسائل العملاء (Business Messages)
+	msg := update.BusinessMessage
+	if msg.Text != "" && !msg.IsOutgoing && !isBotStopped {
+		chat := msg.Chat.ID
+		if chat == 0 {
+			chat = msg.From.ID
 		}
 
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-		return
-	}
-
-	// 2. إذا كانت المحادثة متوقفة بناءً على طلبك، لا تقم بالرد نهائياً
-	if stoppedChats[chat] {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-		return
-	}
-
-	// 3. الرد الآلي على الشخص المراسل
-	if msg.Text != "" && !msg.From.IsBot {
 		senderName := msg.From.FirstName
 		if senderName == "" {
 			senderName = "صديقي"
@@ -111,7 +102,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		jsonPayload, _ := json.Marshal(payload)
-		apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
 		http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
 	}
 
@@ -119,13 +109,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("OK"))
 }
 
-// دالة لحذف رسائلك (مثل أمر إيقاف أو تشغيل) تلقائياً لكي تبقى المحادثة نظيفة
-func deleteMessage(botToken string, chatID int64, messageID int) {
-	payload := DeleteMessagePayload{
-		ChatID:    chatID,
-		MessageID: messageID,
+func sendSimpleMessage(apiURL string, chatID int64, text string) {
+	payload := map[string]interface{}{
+		"chat_id": chatID,
+		"text":    text,
 	}
 	jsonPayload, _ := json.Marshal(payload)
-	apiURL := "https://api.telegram.org/bot" + botToken + "/deleteMessage"
 	http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
 }
