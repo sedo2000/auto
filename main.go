@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math/rand"
 	"net/http"
 	"os"
@@ -11,6 +12,9 @@ import (
 	"strings"
 	"time"
 )
+
+// عميل HTTP مشترك مع timeout حتى لا يتجمد الطلب لو تأخر تليجرام
+var httpClient = &http.Client{Timeout: 8 * time.Second}
 
 // قائمة الاقتباسات
 var quotes = []string{
@@ -38,8 +42,8 @@ type BotConfig struct {
 }
 
 type TelegramUpdate struct {
-	Message       *Message       `json:"message"`
-	CallbackQuery *CallbackQuery `json:"callback_query"`
+	Message         *Message       `json:"message"`
+	CallbackQuery   *CallbackQuery `json:"callback_query"`
 	BusinessMessage *struct {
 		MessageID int `json:"message_id"`
 		Chat      struct {
@@ -92,8 +96,19 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// --- فحص أمني: التحقق من Secret Token الخاص بالـ Webhook ---
+	// اضبطه عند استدعاء setWebhook بالبراميتر secret_token، وخزّنه بنفس القيمة هنا.
+	if secret := os.Getenv("TELEGRAM_WEBHOOK_SECRET"); secret != "" {
+		if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != secret {
+			log.Println("رفض طلب: secret token غير مطابق")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+	}
+
 	var update TelegramUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		log.Println("خطأ في قراءة التحديث:", err)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -104,7 +119,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		answerCallback(botToken, cb.ID)
 
 		if cb.Data == "change_quote" {
-			rand.Seed(time.Now().UnixNano())
 			newQuote := quotes[rand.Intn(len(quotes))]
 			updateButtonQuote(botToken, cb.Message.Chat.ID, cb.Message.MessageID, newQuote)
 			w.WriteHeader(http.StatusOK)
@@ -239,33 +253,25 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// *** حظر وحذف كل رسائل وأزرار البوت السابقة فوراً بالمسح التسلسلي ***
-		currentMsgID := msg.MessageID
-		if currentMsgID > 1 {
-			for id := currentMsgID - 1; id >= currentMsgID-6 && id > 0; id-- {
-				deleteMessage(botToken, customerChatID, id)
-			}
-		}
-
-		// تجهيز اسم العميل واسمه الأول
+		// تجهيز اسم العميل
 		customerName := msg.From.FirstName
 		if customerName == "" {
 			customerName = "صديقي"
 		}
 
 		var replyText string
-		if config.AutoReply == "" {
+		if strings.TrimSpace(msg.Text) == "" {
+			// رسالة غير نصية (صورة/ملصق/صوت...) - رد عام مختصر
+			replyText = "شكراً لتواصلك يا " + customerName + " 🌸\nاستلمت رسالتك وسأرد عليك قريباً."
+		} else if config.AutoReply == "" {
 			replyText = "أهلاً بك يا " + customerName + " 🌸\nأنا غير متوفر الآن، اترك رسالتك وسأرد عليك قريباً."
+		} else if strings.Contains(config.AutoReply, "{name}") || strings.Contains(config.AutoReply, "{الاسم}") {
+			replyText = strings.ReplaceAll(config.AutoReply, "{name}", customerName)
+			replyText = strings.ReplaceAll(replyText, "{الاسم}", customerName)
 		} else {
-			if strings.Contains(config.AutoReply, "{name}") || strings.Contains(config.AutoReply, "{الاسم}") {
-				replyText = strings.ReplaceAll(config.AutoReply, "{name}", customerName)
-				replyText = strings.ReplaceAll(replyText, "{الاسم}", customerName)
-			} else {
-				replyText = "أهلاً بك يا " + customerName + " 🌸\n" + config.AutoReply
-			}
+			replyText = "أهلاً بك يا " + customerName + " 🌸\n" + config.AutoReply
 		}
 
-		// إرسال الرد الجديد مع الزر الشفاف
 		sendBusinessReplyWithQuoteButton(botToken, customerChatID, replyText, msg.BusinessConnectionID)
 	}
 
@@ -277,14 +283,18 @@ func getAdminIDFromBusinessConn(token string, connID string) int64 {
 		return 0
 	}
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getBusinessConnection?business_connection_id=%s", token, connID)
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
+		log.Println("خطأ getBusinessConnection:", err)
 		return 0
 	}
 	defer resp.Body.Close()
 
 	var res BusinessConnectionResponse
-	json.NewDecoder(resp.Body).Decode(&res)
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		log.Println("خطأ فك تشفير getBusinessConnection:", err)
+		return 0
+	}
 	if res.Result.UserChatID != 0 {
 		return res.Result.UserChatID
 	}
@@ -304,8 +314,9 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 	}
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getChat?chat_id=%d", token, chatID)
-	resp, err := http.Get(url)
+	resp, err := httpClient.Get(url)
 	if err != nil {
+		log.Println("خطأ getChat:", err)
 		return defaultCfg, 0
 	}
 	defer resp.Body.Close()
@@ -319,7 +330,10 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 		} `json:"result"`
 	}
 
-	json.NewDecoder(resp.Body).Decode(&res)
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		log.Println("خطأ فك تشفير getChat:", err)
+		return defaultCfg, 0
+	}
 
 	if res.Result.PinnedMessage.MessageID != 0 {
 		var cfg BotConfig
@@ -346,7 +360,9 @@ func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
 			"text":       cfgText,
 		}
 		pBytes, _ := json.Marshal(payload)
-		http.Post(url, "application/json", bytes.NewBuffer(pBytes))
+		if _, err := httpClient.Post(url, "application/json", bytes.NewBuffer(pBytes)); err != nil {
+			log.Println("خطأ editMessageText:", err)
+		}
 	} else {
 		url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
 		payload := map[string]interface{}{
@@ -354,23 +370,31 @@ func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
 			"text":    cfgText,
 		}
 		pBytes, _ := json.Marshal(payload)
-		resp, err := http.Post(url, "application/json", bytes.NewBuffer(pBytes))
-		if err == nil {
-			var res struct {
-				Result struct {
-					MessageID int `json:"message_id"`
-				} `json:"result"`
+		resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(pBytes))
+		if err != nil {
+			log.Println("خطأ sendMessage (saveConfig):", err)
+			return
+		}
+		defer resp.Body.Close()
+		var res struct {
+			Result struct {
+				MessageID int `json:"message_id"`
+			} `json:"result"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+			log.Println("خطأ فك تشفير sendMessage:", err)
+			return
+		}
+		if res.Result.MessageID != 0 {
+			pinUrl := fmt.Sprintf("https://api.telegram.org/bot%s/pinChatMessage", token)
+			pinPayload := map[string]interface{}{
+				"chat_id":              chatID,
+				"message_id":           res.Result.MessageID,
+				"disable_notification": true,
 			}
-			json.NewDecoder(resp.Body).Decode(&res)
-			if res.Result.MessageID != 0 {
-				pinUrl := fmt.Sprintf("https://api.telegram.org/bot%s/pinChatMessage", token)
-				pinPayload := map[string]interface{}{
-					"chat_id":              chatID,
-					"message_id":           res.Result.MessageID,
-					"disable_notification": true,
-				}
-				pPinBytes, _ := json.Marshal(pinPayload)
-				http.Post(pinUrl, "application/json", bytes.NewBuffer(pPinBytes))
+			pPinBytes, _ := json.Marshal(pinPayload)
+			if _, err := httpClient.Post(pinUrl, "application/json", bytes.NewBuffer(pPinBytes)); err != nil {
+				log.Println("خطأ pinChatMessage:", err)
 			}
 		}
 	}
@@ -393,7 +417,9 @@ func sendMenu(token string, chatID int64, text string) {
 		"reply_markup": keyboard,
 	}
 	b, _ := json.Marshal(payload)
-	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ sendMenu:", err)
+	}
 }
 
 func sendSubMenu(token string, chatID int64, text string) {
@@ -410,7 +436,9 @@ func sendSubMenu(token string, chatID int64, text string) {
 		"reply_markup": keyboard,
 	}
 	b, _ := json.Marshal(payload)
-	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ sendSubMenu:", err)
+	}
 }
 
 func sendMessage(token string, chatID int64, text string) {
@@ -420,11 +448,12 @@ func sendMessage(token string, chatID int64, text string) {
 		"parse_mode": "Markdown",
 	}
 	b, _ := json.Marshal(payload)
-	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ sendMessage:", err)
+	}
 }
 
 func sendBusinessReplyWithQuoteButton(token string, chatID int64, text, bizID string) {
-	rand.Seed(time.Now().UnixNano())
 	initialQuote := quotes[rand.Intn(len(quotes))]
 
 	keyboard := map[string]interface{}{
@@ -440,7 +469,9 @@ func sendBusinessReplyWithQuoteButton(token string, chatID int64, text, bizID st
 		"reply_markup":           keyboard,
 	}
 	b, _ := json.Marshal(payload)
-	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ sendBusinessReplyWithQuoteButton:", err)
+	}
 }
 
 func updateButtonQuote(token string, chatID int64, msgID int, newQuote string) {
@@ -456,7 +487,9 @@ func updateButtonQuote(token string, chatID int64, msgID int, newQuote string) {
 		"reply_markup": keyboard,
 	}
 	b, _ := json.Marshal(payload)
-	http.Post("https://api.telegram.org/bot"+token+"/editMessageReplyMarkup", "application/json", bytes.NewBuffer(b))
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/editMessageReplyMarkup", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ updateButtonQuote:", err)
+	}
 }
 
 func deleteMessage(token string, chatID int64, msgID int) {
@@ -465,11 +498,15 @@ func deleteMessage(token string, chatID int64, msgID int) {
 		"message_id": msgID,
 	}
 	b, _ := json.Marshal(payload)
-	http.Post("https://api.telegram.org/bot"+token+"/deleteMessage", "application/json", bytes.NewBuffer(b))
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/deleteMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ deleteMessage:", err)
+	}
 }
 
 func answerCallback(token, callbackID string) {
 	payload := map[string]string{"callback_query_id": callbackID}
 	b, _ := json.Marshal(payload)
-	http.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b))
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ answerCallback:", err)
+	}
 }
