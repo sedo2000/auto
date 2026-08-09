@@ -12,7 +12,6 @@ import (
 	"time"
 )
 
-// قائمة الاقتباسات (تم حذف "ميو")
 var quotes = []string{
 	"قاوم ما تكره لتصل الى ما تحب",
 	"الحرب بين أنت ضد أنت",
@@ -35,14 +34,15 @@ type BotConfig struct {
 	AutoReply   string         `json:"auto_reply"`
 	Excluded    []int64        `json:"excluded"`
 	State       string         `json:"state"`
-	LastReplies map[string]int `json:"last_replies"` // لحفظ ايدي آخر رد لكل عميل لمسحه لاحقاً
+	LastReplies map[string]int `json:"last_replies"`
 }
 
 type TelegramUpdate struct {
 	Message       *Message       `json:"message"`
 	CallbackQuery *CallbackQuery `json:"callback_query"`
 	BusinessMessage *struct {
-		Chat struct {
+		MessageID int `json:"message_id"`
+		Chat      struct {
 			ID int64 `json:"id"`
 		} `json:"chat"`
 		From struct {
@@ -103,7 +103,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
 
-		// تغيير الاقتباس داخل الزر عند ضغط العميل عليه
 		if cb.Data == "change_quote" {
 			rand.Seed(time.Now().UnixNano())
 			newQuote := quotes[rand.Intn(len(quotes))]
@@ -112,7 +111,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// لوحة تحكم الآدمن
 		deleteMessage(botToken, cb.Message.Chat.ID, cb.Message.MessageID)
 		adminID := cb.From.ID
 		config, msgID := getConfig(botToken, adminID)
@@ -135,11 +133,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		case "edit_text":
 			config.State = "waiting_text"
 			saveConfig(botToken, adminID, config, msgID)
-			sendSubMenu(botToken, adminID, "📝 أرسل الآن نص الرد التلقائي الجديد (يمكنك استخدام {name} أو {الاسم} لذكر اسم العميل تلقائياً):")
+			sendSubMenu(botToken, adminID, "📝 أرسل الآن نص الرد التلقائي الجديد:")
 		case "exclude":
 			config.State = "waiting_id"
 			saveConfig(botToken, adminID, config, msgID)
-			txt := "👤 أرسل ايدي الحساب المراد استثناؤه الآن:\n(إذا كنت لا تعرف الايدي، أرسل /id في محادثة الشخص وانسخ الرقم)"
+			txt := "👤 أرسل ايدي الحساب المراد استثناؤه الآن:"
 			sendSubMenu(botToken, adminID, txt)
 		case "list_excluded":
 			txt := "📋 **قائمة الحسابات المستثناة:**\n"
@@ -161,7 +159,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. التعامل مع محادثة لوحة التحكم الخاصة بك
+	// 2. محادثة التحكم
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -210,7 +208,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. إرسال الرد التلقائي للعميل مع الاسم وحذف الرد السابق (Business Messages)
+	// 3. رسائل العملاء (Business Messages)
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 
@@ -241,27 +239,32 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// أ) حذف الرسالة الترحيبية والزر السابقين لهذا العميل
+		// مسح رسالة الترحيب والزر السابقة الخاصة بالبوت لهذا العميل
 		custKey := strconv.FormatInt(customerChatID, 10)
 		if prevMsgID, exists := config.LastReplies[custKey]; exists && prevMsgID > 0 {
 			deleteMessage(botToken, customerChatID, prevMsgID)
 		}
 
-		// ب) تجهيز اسم العميل واستبداله في نص الترحيب
+		// إدراج اسم العميل تلقائياً في النص
 		customerName := msg.From.FirstName
 		if customerName == "" {
 			customerName = "صديقي"
 		}
 
-		replyText := config.AutoReply
-		if replyText == "" {
-			replyText = "مرحبا بك يا " + customerName + "\nأنا غير متوفر الآن، يرجى ترك رسالتك وسأرد عليك قريباً."
+		var replyText string
+		if config.AutoReply == "" {
+			replyText = "أهلاً بك يا " + customerName + " 🌸\nأنا غير متوفر الآن، اترك رسالتك وسأرد عليك قريباً."
 		} else {
-			replyText = strings.ReplaceAll(replyText, "{name}", customerName)
-			replyText = strings.ReplaceAll(replyText, "{الاسم}", customerName)
+			// إذا يحتوي النص على القالب يتم استبداله، وإلا يضاف اسم العميل في بداية النص
+			if strings.Contains(config.AutoReply, "{name}") || strings.Contains(config.AutoReply, "{الاسم}") {
+				replyText = strings.ReplaceAll(config.AutoReply, "{name}", customerName)
+				replyText = strings.ReplaceAll(replyText, "{الاسم}", customerName)
+			} else {
+				replyText = "أهلاً بك يا " + customerName + " 🌸\n" + config.AutoReply
+			}
 		}
 
-		// ج) إرسال الرد الجديد وحفظ ايدي الرسالة لحذفها في المرة القادمة
+		// إرسال الرد الجديد مع الزر الشفاف وحفظ الايدي للمسح في المرة القادمة
 		newMsgID := sendBusinessReplyWithQuoteButton(botToken, customerChatID, replyText, msg.BusinessConnectionID)
 		if newMsgID != 0 {
 			if config.LastReplies == nil {
