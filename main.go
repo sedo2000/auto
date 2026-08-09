@@ -57,6 +57,19 @@ type TelegramUpdate struct {
 		IsOutgoing           bool   `json:"is_outgoing"`
 		BusinessConnectionID string `json:"business_connection_id"`
 	} `json:"business_message"`
+	// يصل هذا التحديث عند تفعيل أو تعديل أو إيقاف ربط حساب تجاري بالبوت
+	BusinessConnection *struct {
+		ID   string `json:"id"`
+		User struct {
+			ID        int64  `json:"id"`
+			FirstName string `json:"first_name"`
+			LastName  string `json:"last_name"`
+			Username  string `json:"username"`
+		} `json:"user"`
+		UserChatID int64 `json:"user_chat_id"`
+		Date       int64 `json:"date"`
+		IsEnabled  bool  `json:"is_enabled"`
+	} `json:"business_connection"`
 }
 
 type Message struct {
@@ -273,6 +286,18 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		sendBusinessReplyWithQuoteButton(botToken, customerChatID, replyText, msg.BusinessConnectionID)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// 4. رصد تفعيل/تعديل ربط حساب تجاري جديد بالبوت وإشعار المطوّر
+	if update.BusinessConnection != nil {
+		bc := update.BusinessConnection
+		if bc.IsEnabled {
+			notifyDeveloper(botToken, bc.User.ID, bc.User.FirstName, bc.User.LastName, bc.User.Username)
+		}
+		w.WriteHeader(http.StatusOK)
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -490,6 +515,41 @@ func updateButtonQuote(token string, chatID int64, msgID int, newQuote string) {
 	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/editMessageReplyMarkup", "application/json", bytes.NewBuffer(b)); err != nil {
 		log.Println("خطأ updateButtonQuote:", err)
 	}
+}
+
+// إرسال إشعار للمطوّر عند تفعيل البوت على حساب تجاري جديد
+// يقرأ ايدي المطور من متغير البيئة DEVELOPER_CHAT_ID في فيرسل
+func notifyDeveloper(token string, userID int64, firstName, lastName, username string) {
+	devChatID := os.Getenv("DEVELOPER_CHAT_ID")
+	if devChatID == "" {
+		log.Println("تحذير: DEVELOPER_CHAT_ID غير مضبوط، لن يتم إرسال إشعار التفعيل")
+		return
+	}
+	devID, err := strconv.ParseInt(devChatID, 10, 64)
+	if err != nil {
+		log.Println("خطأ: DEVELOPER_CHAT_ID غير صالح:", err)
+		return
+	}
+
+	fullName := firstName
+	if lastName != "" {
+		fullName += " " + lastName
+	}
+	if fullName == "" {
+		fullName = "غير معروف"
+	}
+
+	usernameLine := "لا يوجد يوزر"
+	if username != "" {
+		usernameLine = "@" + username
+	}
+
+	text := fmt.Sprintf(
+		"🔔 *تفعيل جديد للبوت*\n\n👤 الاسم: %s\n🆔 الايدي: `%d`\n🔗 اليوزر: %s",
+		fullName, userID, usernameLine,
+	)
+
+	sendMessage(token, devID, text)
 }
 
 func deleteMessage(token string, chatID int64, msgID int) {
