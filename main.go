@@ -35,10 +35,11 @@ var quotes = []string{
 }
 
 type BotConfig struct {
-	IsStopped bool    `json:"is_stopped"`
-	AutoReply string  `json:"auto_reply"`
-	Excluded  []int64 `json:"excluded"`
-	State     string  `json:"state"`
+	IsStopped      bool    `json:"is_stopped"`
+	AutoReply      string  `json:"auto_reply"`
+	Excluded       []int64 `json:"excluded"`
+	State          string  `json:"state"`
+	BusinessConnID string  `json:"business_conn_id"`
 }
 
 type TelegramUpdate struct {
@@ -72,6 +73,12 @@ type TelegramUpdate struct {
 	} `json:"business_connection"`
 }
 
+type PhotoSize struct {
+	FileID string `json:"file_id"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
 type Message struct {
 	MessageID int `json:"message_id"`
 	Chat      struct {
@@ -80,7 +87,8 @@ type Message struct {
 	From struct {
 		ID int64 `json:"id"`
 	} `json:"from"`
-	Text string `json:"text"`
+	Text  string      `json:"text"`
+	Photo []PhotoSize `json:"photo"`
 }
 
 type CallbackQuery struct {
@@ -180,6 +188,50 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			config.Excluded = []int64{}
 			saveConfig(botToken, adminID, config, msgID)
 			sendMenu(botToken, adminID, "🧹 تم مسح جميع الاستثناءات بنجاح.")
+		case "profile_menu":
+			config.State = ""
+			saveConfig(botToken, adminID, config, msgID)
+			sendProfileMenu(botToken, adminID, "🧑 إدارة الملف الشخصي - اختر ما تريد تعديله:")
+		case "edit_first_name":
+			if config.BusinessConnID == "" {
+				sendProfileMenu(botToken, adminID, "❌ لم يتم ربط حساب تجاري بعد بالبوت.")
+				break
+			}
+			config.State = "waiting_first_name"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, "✏️ أرسل الآن الاسم الأول الجديد (والاسم الأخير بعده بمسافة، اختياري):")
+		case "edit_bio":
+			if config.BusinessConnID == "" {
+				sendProfileMenu(botToken, adminID, "❌ لم يتم ربط حساب تجاري بعد بالبوت.")
+				break
+			}
+			config.State = "waiting_bio"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, "📝 أرسل الآن النبذة الجديدة (حد أقصى 140 حرف):")
+		case "edit_username":
+			if config.BusinessConnID == "" {
+				sendProfileMenu(botToken, adminID, "❌ لم يتم ربط حساب تجاري بعد بالبوت.")
+				break
+			}
+			config.State = "waiting_username"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, "🔗 أرسل الآن اسم المستخدم الجديد (بدون @):")
+		case "edit_photo":
+			if config.BusinessConnID == "" {
+				sendProfileMenu(botToken, adminID, "❌ لم يتم ربط حساب تجاري بعد بالبوت.")
+				break
+			}
+			config.State = "waiting_photo"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, "🖼️ أرسل الآن الصورة الجديدة لملفك الشخصي:")
+		case "post_story":
+			if config.BusinessConnID == "" {
+				sendMenu(botToken, adminID, "❌ لم يتم ربط حساب تجاري بعد بالبوت.")
+				break
+			}
+			config.State = "waiting_story"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, "📖 أرسل الآن الصورة التي تريد نشرها كقصة (ستُنشر لمدة 24 ساعة):")
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -228,6 +280,63 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 				sendMenu(botToken, chatID, fmt.Sprintf("✅ تم إضافة الايدي `%d` إلى قائمة الاستثناء.", id))
 			} else {
 				sendSubMenu(botToken, chatID, "❌ أرقام فقط! أرسل الايدي بشكل صحيح.")
+			}
+		} else if config.State == "waiting_first_name" {
+			parts := strings.SplitN(strings.TrimSpace(msg.Text), " ", 2)
+			firstName := parts[0]
+			lastName := ""
+			if len(parts) > 1 {
+				lastName = parts[1]
+			}
+			if err := setBusinessAccountName(botToken, config.BusinessConnID, firstName, lastName); err != nil {
+				sendSubMenu(botToken, chatID, "❌ فشل تعديل الاسم: "+err.Error())
+			} else {
+				config.State = ""
+				saveConfig(botToken, chatID, config, msgID)
+				sendMenu(botToken, chatID, "✅ تم تعديل الاسم بنجاح!")
+			}
+		} else if config.State == "waiting_bio" {
+			if err := setBusinessAccountBio(botToken, config.BusinessConnID, msg.Text); err != nil {
+				sendSubMenu(botToken, chatID, "❌ فشل تعديل النبذة: "+err.Error())
+			} else {
+				config.State = ""
+				saveConfig(botToken, chatID, config, msgID)
+				sendMenu(botToken, chatID, "✅ تم تعديل النبذة بنجاح!")
+			}
+		} else if config.State == "waiting_username" {
+			username := strings.TrimPrefix(strings.TrimSpace(msg.Text), "@")
+			if err := setBusinessAccountUsername(botToken, config.BusinessConnID, username); err != nil {
+				sendSubMenu(botToken, chatID, "❌ فشل تعديل اليوزر: "+err.Error())
+			} else {
+				config.State = ""
+				saveConfig(botToken, chatID, config, msgID)
+				sendMenu(botToken, chatID, "✅ تم تعديل اسم المستخدم بنجاح!")
+			}
+		} else if config.State == "waiting_photo" {
+			if len(msg.Photo) == 0 {
+				sendSubMenu(botToken, chatID, "❌ أرسل صورة فعلية (لا يقبل ملفات أو نصوص).")
+			} else {
+				fileID := msg.Photo[len(msg.Photo)-1].FileID
+				if err := setBusinessAccountProfilePhoto(botToken, config.BusinessConnID, fileID); err != nil {
+					sendSubMenu(botToken, chatID, "❌ فشل تعديل الصورة: "+err.Error())
+				} else {
+					config.State = ""
+					saveConfig(botToken, chatID, config, msgID)
+					sendMenu(botToken, chatID, "✅ تم تعديل صورة الملف الشخصي بنجاح!")
+				}
+			}
+		} else if config.State == "waiting_story" {
+			if len(msg.Photo) == 0 {
+				sendSubMenu(botToken, chatID, "❌ أرسل صورة فعلية لنشرها كقصة.")
+			} else {
+				fileID := msg.Photo[len(msg.Photo)-1].FileID
+				if err := postBusinessStory(botToken, config.BusinessConnID, fileID); err != nil {
+					sendSubMenu(botToken, chatID, "❌ فشل نشر القصة: "+err.Error())
+				} else {
+					config.State = ""
+					saveConfig(botToken, chatID, config, msgID)
+					sendMenu(botToken, chatID, "✅ تم نشر القصة بنجاح! ستبقى ظاهرة لمدة 24 ساعة.")
+				}
 			}
 		}
 
@@ -295,6 +404,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		bc := update.BusinessConnection
 		if bc.IsEnabled {
 			notifyDeveloper(botToken, bc.User.ID, bc.User.FirstName, bc.User.LastName, bc.User.Username)
+
+			// حفظ business_connection_id في إعدادات صاحب الحساب حتى نستخدمه
+			// لاحقاً في تعديل الملف الشخصي ونشر القصص
+			if bc.UserChatID != 0 {
+				cfg, msgID := getConfig(botToken, bc.UserChatID)
+				cfg.BusinessConnID = bc.ID
+				saveConfig(botToken, bc.UserChatID, cfg, msgID)
+			}
 		}
 		w.WriteHeader(http.StatusOK)
 		return
@@ -328,10 +445,11 @@ func getAdminIDFromBusinessConn(token string, connID string) int64 {
 
 func getConfig(token string, chatID int64) (BotConfig, int) {
 	defaultCfg := BotConfig{
-		IsStopped: false,
-		AutoReply: "",
-		Excluded:  []int64{},
-		State:     "",
+		IsStopped:      false,
+		AutoReply:      "",
+		Excluded:       []int64{},
+		State:          "",
+		BusinessConnID: "",
 	}
 
 	if chatID == 0 {
@@ -432,6 +550,8 @@ func sendMenu(token string, chatID int64, text string) {
 			{{"text": "📝 تعديل نص الرد", "callback_data": "edit_text"}},
 			{{"text": "👤 استثناء حساب", "callback_data": "exclude"}, {"text": "📋 عرض المستثنين", "callback_data": "list_excluded"}},
 			{{"text": "🧹 مسح المستثنين", "callback_data": "clear_excluded"}},
+			{{"text": "🧑 إدارة الملف الشخصي", "callback_data": "profile_menu"}},
+			{{"text": "📖 نشر قصة", "callback_data": "post_story"}},
 		},
 	}
 
@@ -444,6 +564,29 @@ func sendMenu(token string, chatID int64, text string) {
 	b, _ := json.Marshal(payload)
 	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
 		log.Println("خطأ sendMenu:", err)
+	}
+}
+
+func sendProfileMenu(token string, chatID int64, text string) {
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": "✏️ تعديل الاسم", "callback_data": "edit_first_name"}},
+			{{"text": "📝 تعديل النبذة", "callback_data": "edit_bio"}},
+			{{"text": "🖼️ تعديل الصورة", "callback_data": "edit_photo"}},
+			{{"text": "🔗 تعديل اليوزر", "callback_data": "edit_username"}},
+			{{"text": "🔙 رجوع", "callback_data": "main_menu"}},
+		},
+	}
+
+	payload := map[string]interface{}{
+		"chat_id":      chatID,
+		"text":         text,
+		"parse_mode":   "Markdown",
+		"reply_markup": keyboard,
+	}
+	b, _ := json.Marshal(payload)
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ sendProfileMenu:", err)
 	}
 }
 
@@ -550,6 +693,87 @@ func notifyDeveloper(token string, userID int64, firstName, lastName, username s
 	)
 
 	sendMessage(token, devID, text)
+}
+
+// --- دوال إدارة الملف الشخصي والقصص عبر Telegram Business API ---
+
+// نتيجة عامة من تليجرام للتحقق من نجاح الطلب وقراءة رسالة الخطأ إن وُجدت
+type apiResult struct {
+	Ok          bool   `json:"ok"`
+	Description string `json:"description"`
+}
+
+func callBusinessAPI(token, method string, payload map[string]interface{}) error {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
+	b, _ := json.Marshal(payload)
+	resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(b))
+	if err != nil {
+		log.Println("خطأ استدعاء", method, ":", err)
+		return fmt.Errorf("تعذر الاتصال بتليجرام")
+	}
+	defer resp.Body.Close()
+
+	var res apiResult
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		log.Println("خطأ فك تشفير رد", method, ":", err)
+		return fmt.Errorf("رد غير متوقع من تليجرام")
+	}
+	if !res.Ok {
+		log.Println("فشل", method, ":", res.Description)
+		return fmt.Errorf(res.Description)
+	}
+	return nil
+}
+
+func setBusinessAccountName(token, businessConnID, firstName, lastName string) error {
+	payload := map[string]interface{}{
+		"business_connection_id": businessConnID,
+		"first_name":             firstName,
+	}
+	if lastName != "" {
+		payload["last_name"] = lastName
+	}
+	return callBusinessAPI(token, "setBusinessAccountName", payload)
+}
+
+func setBusinessAccountBio(token, businessConnID, bio string) error {
+	payload := map[string]interface{}{
+		"business_connection_id": businessConnID,
+		"bio":                    bio,
+	}
+	return callBusinessAPI(token, "setBusinessAccountBio", payload)
+}
+
+func setBusinessAccountUsername(token, businessConnID, username string) error {
+	payload := map[string]interface{}{
+		"business_connection_id": businessConnID,
+		"username":               username,
+	}
+	return callBusinessAPI(token, "setBusinessAccountUsername", payload)
+}
+
+func setBusinessAccountProfilePhoto(token, businessConnID, fileID string) error {
+	payload := map[string]interface{}{
+		"business_connection_id": businessConnID,
+		"photo": map[string]interface{}{
+			"type":  "static",
+			"photo": fileID,
+		},
+	}
+	return callBusinessAPI(token, "setBusinessAccountProfilePhoto", payload)
+}
+
+func postBusinessStory(token, businessConnID, fileID string) error {
+	payload := map[string]interface{}{
+		"business_connection_id": businessConnID,
+		"content": map[string]interface{}{
+			"type":  "photo",
+			"photo": fileID,
+		},
+		// المدة المسموحة: 21600 (6س) / 43200 (12س) / 86400 (24س) / 172800 (48س)
+		"active_period": 86400,
+	}
+	return callBusinessAPI(token, "postStory", payload)
 }
 
 func deleteMessage(token string, chatID int64, msgID int) {
