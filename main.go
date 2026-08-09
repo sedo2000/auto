@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// قائمة الاقتباسات (بدون كلمة ميو)
+// قائمة الاقتباسات
 var quotes = []string{
 	"قاوم ما تكره لتصل الى ما تحب",
 	"الحرب بين أنت ضد أنت",
@@ -31,11 +31,10 @@ var quotes = []string{
 }
 
 type BotConfig struct {
-	IsStopped   bool           `json:"is_stopped"`
-	AutoReply   string         `json:"auto_reply"`
-	Excluded    []int64        `json:"excluded"`
-	State       string         `json:"state"`
-	LastReplies map[string]int `json:"last_replies"` // خريطة لتتبع أيدي آخر رسالة أرسلها البوت لكل عميل
+	IsStopped bool    `json:"is_stopped"`
+	AutoReply string  `json:"auto_reply"`
+	Excluded  []int64 `json:"excluded"`
+	State     string  `json:"state"`
 }
 
 type TelegramUpdate struct {
@@ -160,7 +159,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. معالجة الأوامر والرسائل المباشرة في محادثة البوت (خاص الآدمن)
+	// 2. معالجة محادثة التحكم الخاصة بك
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -209,7 +208,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. معالجة رسائل العملاء والرد التلقائي (Business Messages)
+	// 3. معالجة رسائل العملاء (Business Messages)
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 
@@ -224,7 +223,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		config, configMsgID := getConfig(botToken, adminID)
+		config, _ := getConfig(botToken, adminID)
 
 		if config.IsStopped {
 			w.WriteHeader(http.StatusOK)
@@ -240,13 +239,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// الخطوة أ: حذف رسالة البوت السابقة لدى هذا العميل (الرد + الزر القديم)
-		custKey := strconv.FormatInt(customerChatID, 10)
-		if prevMsgID, exists := config.LastReplies[custKey]; exists && prevMsgID > 0 {
-			deleteMessage(botToken, customerChatID, prevMsgID)
+		// *** حظر وحذف كل رسائل وأزرار البوت السابقة فوراً بالمسح التسلسلي ***
+		currentMsgID := msg.MessageID
+		if currentMsgID > 1 {
+			for id := currentMsgID - 1; id >= currentMsgID-6 && id > 0; id-- {
+				deleteMessage(botToken, customerChatID, id)
+			}
 		}
 
-		// الخطوة ب: تجهيز اسم العميل وبناء النص
+		// تجهيز اسم العميل واسمه الأول
 		customerName := msg.From.FirstName
 		if customerName == "" {
 			customerName = "صديقي"
@@ -264,15 +265,8 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// الخطوة ج: إرسال الرد الجديد مع الزر الشفاف وحفظ الايدي الجديد للحذف في المرة القادمة
-		newMsgID := sendBusinessReplyWithQuoteButton(botToken, customerChatID, replyText, msg.BusinessConnectionID)
-		if newMsgID != 0 {
-			if config.LastReplies == nil {
-				config.LastReplies = make(map[string]int)
-			}
-			config.LastReplies[custKey] = newMsgID
-			saveConfig(botToken, adminID, config, configMsgID)
-		}
+		// إرسال الرد الجديد مع الزر الشفاف
+		sendBusinessReplyWithQuoteButton(botToken, customerChatID, replyText, msg.BusinessConnectionID)
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -299,11 +293,10 @@ func getAdminIDFromBusinessConn(token string, connID string) int64 {
 
 func getConfig(token string, chatID int64) (BotConfig, int) {
 	defaultCfg := BotConfig{
-		IsStopped:   false,
-		AutoReply:   "",
-		Excluded:    []int64{},
-		State:       "",
-		LastReplies: make(map[string]int),
+		IsStopped: false,
+		AutoReply: "",
+		Excluded:  []int64{},
+		State:     "",
 	}
 
 	if chatID == 0 {
@@ -331,9 +324,6 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 	if res.Result.PinnedMessage.MessageID != 0 {
 		var cfg BotConfig
 		if err := json.Unmarshal([]byte(res.Result.PinnedMessage.Text), &cfg); err == nil {
-			if cfg.LastReplies == nil {
-				cfg.LastReplies = make(map[string]int)
-			}
 			return cfg, res.Result.PinnedMessage.MessageID
 		}
 	}
@@ -433,7 +423,7 @@ func sendMessage(token string, chatID int64, text string) {
 	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
-func sendBusinessReplyWithQuoteButton(token string, chatID int64, text, bizID string) int {
+func sendBusinessReplyWithQuoteButton(token string, chatID int64, text, bizID string) {
 	rand.Seed(time.Now().UnixNano())
 	initialQuote := quotes[rand.Intn(len(quotes))]
 
@@ -450,19 +440,7 @@ func sendBusinessReplyWithQuoteButton(token string, chatID int64, text, bizID st
 		"reply_markup":           keyboard,
 	}
 	b, _ := json.Marshal(payload)
-	resp, err := http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
-	if err != nil {
-		return 0
-	}
-	defer resp.Body.Close()
-
-	var res struct {
-		Result struct {
-			MessageID int `json:"message_id"`
-		} `json:"result"`
-	}
-	json.NewDecoder(resp.Body).Decode(&res)
-	return res.Result.MessageID
+	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
 func updateButtonQuote(token string, chatID int64, msgID int, newQuote string) {
