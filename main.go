@@ -8,10 +8,12 @@ import (
 )
 
 type TelegramUpdate struct {
-	UpdateID int `json:"update_id"`
+	UpdateID        int `json:"update_id"`
 	BusinessMessage struct {
-		MessageID int `json:"message_id"`
-		Chat struct {
+		MessageID            int    `json:"message_id"`
+		IsOutgoing           bool   `json:"is_outgoing"`
+		BusinessConnectionID string `json:"business_connection_id"`
+		Chat                 struct {
 			ID int64 `json:"id"`
 		} `json:"chat"`
 		From struct {
@@ -19,9 +21,7 @@ type TelegramUpdate struct {
 			FirstName string `json:"first_name"`
 			IsBot     bool   `json:"is_bot"`
 		} `json:"from"`
-		Text                 string `json:"text"`
-		BusinessConnectionID string `json:"business_connection_id"`
-		IsOutgoing           bool   `json:"is_outgoing"` // معرفة ما إذا كانت الرسالة صادرة منك
+		Text string `json:"text"`
 	} `json:"business_message"`
 }
 
@@ -52,28 +52,28 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	msg := update.BusinessMessage
 
-	// 1. الشرط الأهم: إذا كانت الرسالة صادرة منك أنت (IsOutgoing == true)، يتوقف البوت فوراً ولا يرد
+	// إذا كانت الرسالة صادرة منك أنت (أي أنك قمت بالرد)، يتوقف البوت فوراً ولا يرد
 	if msg.IsOutgoing {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 		return
 	}
 
-	// 2. التأكد من أن الرسالة تحتوي على نص وليست فارغة أو من بوت آخر
+	// التأكد من أن الرسالة واردة وتحتوي على نص وليست من بوت
 	if msg.Text != "" && !msg.From.IsBot {
 		chat := msg.Chat.ID
 		if chat == 0 {
 			chat = msg.From.ID
 		}
 
-		// استخراج اسم الشخص المراسل (First Name)
+		// جلب اسم الشخص المراسل
 		senderName := msg.From.FirstName
 		if senderName == "" {
 			senderName = "صديقي"
 		}
 
-		// صياغة الرسالة المطلوبة مع تضمين اسم الشخص
-		replyText := "مرحباً بك يا " + senderName + "\nانا غير متوفر الان عد في وقت اخر\nهذا رد تلقائي ."
+		// صياغة الرد بالترتيب والدقة المطلوبة
+		replyText := "مرحبا بك يا " + senderName + "\nانا غير متوفر الان يرجى ترك رسالتك\nوسأرد عليك قريبا"
 
 		payload := SendMessagePayload{
 			ChatID:               chat,
@@ -86,6 +86,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
 	}
 
-I	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
