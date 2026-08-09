@@ -10,12 +10,11 @@ import (
 	"strings"
 )
 
-// هيكلة الإعدادات التي يتم حفظها في الرسالة المثبتة
 type BotConfig struct {
 	IsStopped bool    `json:"is_stopped"`
 	AutoReply string  `json:"auto_reply"`
 	Excluded  []int64 `json:"excluded"`
-	State     string  `json:"state"` // "waiting_text" | "waiting_id"
+	State     string  `json:"state"`
 }
 
 type TelegramUpdate struct {
@@ -55,9 +54,22 @@ type CallbackQuery struct {
 	} `json:"from"`
 }
 
+type BusinessConnectionResponse struct {
+	Ok     bool `json:"ok"`
+	Result struct {
+		User struct {
+			ID int64 `json:"id"`
+		} `json:"user"`
+		UserChatID int64 `json:"user_chat_id"`
+	} `json:"result"`
+}
+
 func Handler(w http.ResponseWriter, r *http.Request) {
 	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	adminIDStr := os.Getenv("ADMIN_ID") // ايدي حسابك في vercel (اختياري)
+	if botToken == "" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
 
 	var update TelegramUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
@@ -65,39 +77,39 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var adminID int64
-	if adminIDStr != "" {
-		adminID, _ = strconv.ParseInt(adminIDStr, 10, 64)
-	}
-
-	// 1. التعامل مع الأزرار الشفافة
+	// 1. التعامل مع الأزرار الشفافة في محادثة البوت
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
 		deleteMessage(botToken, cb.Message.Chat.ID, cb.Message.MessageID)
 
-		config, msgID := getConfig(botToken, cb.From.ID)
+		adminID := cb.From.ID
+		config, msgID := getConfig(botToken, adminID)
 
 		switch cb.Data {
+		case "main_menu":
+			config.State = ""
+			saveConfig(botToken, adminID, config, msgID)
+			sendMenu(botToken, adminID, "القائمة الرئيسية 🤖:")
 		case "stop":
 			config.IsStopped = true
 			config.State = ""
-			saveConfig(botToken, cb.From.ID, config, msgID)
-			sendMenu(botToken, cb.From.ID, "🛑 تم إيقاف الرد التلقائي.")
+			saveConfig(botToken, adminID, config, msgID)
+			sendMenu(botToken, adminID, "🛑 تم إيقاف الرد التلقائي بنجاح.")
 		case "start":
 			config.IsStopped = false
 			config.State = ""
-			saveConfig(botToken, cb.From.ID, config, msgID)
-			sendMenu(botToken, cb.From.ID, "🟢 تم تشغيل الرد التلقائي.")
+			saveConfig(botToken, adminID, config, msgID)
+			sendMenu(botToken, adminID, "🟢 تم تشغيل الرد التلقائي بنجاح.")
 		case "edit_text":
 			config.State = "waiting_text"
-			saveConfig(botToken, cb.From.ID, config, msgID)
-			sendMessage(botToken, cb.From.ID, "📝 أرسل الآن نص الرد التلقائي الجديد الذي تريده:")
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, "📝 أرسل الآن نص الرد التلقائي الجديد الذي تريده:")
 		case "exclude":
 			config.State = "waiting_id"
-			saveConfig(botToken, cb.From.ID, config, msgID)
-			txt := "👤 أرسل ايدي الحساب المراد استثناؤه الآن:\n(إذا كنت لا تعرف الايدي، اضغط /id في محادثة الشخص وانسخ الرقم)"
-			sendMessage(botToken, cb.From.ID, txt)
+			saveConfig(botToken, adminID, config, msgID)
+			txt := "👤 أرسل ايدي الحساب المراد استثناؤه الآن:\n(إذا كنت لا تعرف الايدي، أرسل /id في محادثة الشخص وانسخ الرقم)"
+			sendSubMenu(botToken, adminID, txt)
 		case "list_excluded":
 			txt := "📋 **قائمة الحسابات المستثناة:**\n"
 			if len(config.Excluded) == 0 {
@@ -107,11 +119,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 					txt += fmt.Sprintf("- `%d`\n", id)
 				}
 			}
-			sendMenu(botToken, cb.From.ID, txt)
+			sendSubMenu(botToken, adminID, txt)
 		case "clear_excluded":
 			config.Excluded = []int64{}
-			saveConfig(botToken, cb.From.ID, config, msgID)
-			sendMenu(botToken, cb.From.ID, "🧹 تم مسح جميع الاستثناءات بنجاح.")
+			saveConfig(botToken, adminID, config, msgID)
+			sendMenu(botToken, adminID, "🧹 تم مسح جميع الاستثناءات بنجاح.")
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -135,7 +147,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// فحص حالة انتظار المدخلات (تعديل نص أو إضافة ID)
 		config, msgID := getConfig(botToken, chatID)
 		if config.State == "waiting_text" {
 			config.AutoReply = msg.Text
@@ -145,12 +156,21 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		} else if config.State == "waiting_id" {
 			id, err := strconv.ParseInt(strings.TrimSpace(msg.Text), 10, 64)
 			if err == nil {
-				config.Excluded = append(config.Excluded, id)
+				alreadyExists := false
+				for _, ex := range config.Excluded {
+					if ex == id {
+						alreadyExists = true
+						break
+					}
+				}
+				if !alreadyExists {
+					config.Excluded = append(config.Excluded, id)
+				}
 				config.State = ""
 				saveConfig(botToken, chatID, config, msgID)
 				sendMenu(botToken, chatID, fmt.Sprintf("✅ تم إضافة الايدي `%d` إلى قائمة الاستثناء.", id))
 			} else {
-				sendMessage(botToken, chatID, "❌ أرقام فقط! أرسل الايدي بشكل صحيح.")
+				sendSubMenu(botToken, chatID, "❌ أرقام فقط! أرسل الايدي بشكل صحيح.")
 			}
 		}
 
@@ -159,33 +179,47 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. الرد التلقائي على العملاء (Business Messages)
-	if update.BusinessMessage != nil && !update.BusinessMessage.IsOutgoing {
+	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
-		
-		targetAdminID := adminID
-		if targetAdminID == 0 {
-			targetAdminID = msg.Chat.ID
+
+		// إذا كانت الرسالة صادرة منك أنت، تجاهلها فوراً
+		if msg.IsOutgoing {
+			w.WriteHeader(http.StatusOK)
+			return
 		}
 
-		config, _ := getConfig(botToken, targetAdminID)
+		// استخراج الأيدي الخاص بك من اتصال الـ Business Connection
+		adminID := getAdminIDFromBusinessConn(botToken, msg.BusinessConnectionID)
+		if adminID == 0 {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
 
+		config, _ := getConfig(botToken, adminID)
+
+		// 1. فحص هل البوت متوقف؟
 		if config.IsStopped {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
-		// فحص قائمة الاستثناء
+		// 2. فحص هل أيدي الشخص موجود في قائمة الاستثناء؟
+		senderID := msg.From.ID
+		chatID := msg.Chat.ID
 		for _, exID := range config.Excluded {
-			if exID == msg.From.ID {
+			if exID == senderID || exID == chatID {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
 		}
 
+		// 3. إرسال الرد
 		replyText := config.AutoReply
 		if replyText == "" {
 			name := msg.From.FirstName
-			if name == "" { name = "صديقي" }
+			if name == "" {
+				name = "صديقي"
+			}
 			replyText = "مرحبا بك يا " + name + "\nانا غير متوفر الان يرجى ترك رسالتك\nوسأرد عليك قريبا"
 		}
 
@@ -195,7 +229,25 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// --- دوال إدارة الإعدادات عبر الرسالة المثبتة ---
+// جلب الأيدي الحقيقي لصاحب الحساب من اتصال الـ Business Connection
+func getAdminIDFromBusinessConn(token string, connID string) int64 {
+	if connID == "" {
+		return 0
+	}
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/getBusinessConnection?business_connection_id=%s", token, connID)
+	resp, err := http.Get(url)
+	if err != nil {
+		return 0
+	}
+	defer resp.Body.Close()
+
+	var res BusinessConnectionResponse
+	json.NewDecoder(resp.Body).Decode(&res)
+	if res.Result.UserChatID != 0 {
+		return res.Result.UserChatID
+	}
+	return res.Result.User.ID
+}
 
 func getConfig(token string, chatID int64) (BotConfig, int) {
 	defaultCfg := BotConfig{
@@ -205,9 +257,15 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 		State:     "",
 	}
 
+	if chatID == 0 {
+		return defaultCfg, 0
+	}
+
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getChat?chat_id=%d", token, chatID)
 	resp, err := http.Get(url)
-	if err != nil { return defaultCfg, 0 }
+	if err != nil {
+		return defaultCfg, 0
+	}
 	defer resp.Body.Close()
 
 	var res struct {
@@ -232,6 +290,9 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 }
 
 func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
+	if chatID == 0 {
+		return
+	}
 	b, _ := json.Marshal(cfg)
 	cfgText := string(b)
 
@@ -273,8 +334,6 @@ func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
 	}
 }
 
-// --- دوال الواجهة والأزرار ---
-
 func sendMenu(token string, chatID int64, text string) {
 	keyboard := map[string]interface{}{
 		"inline_keyboard": [][]map[string]string{
@@ -282,6 +341,23 @@ func sendMenu(token string, chatID int64, text string) {
 			{{"text": "📝 تعديل نص الرد", "callback_data": "edit_text"}},
 			{{"text": "👤 استثناء حساب", "callback_data": "exclude"}, {"text": "📋 عرض المستثنين", "callback_data": "list_excluded"}},
 			{{"text": "🧹 مسح المستثنين", "callback_data": "clear_excluded"}},
+		},
+	}
+
+	payload := map[string]interface{}{
+		"chat_id":      chatID,
+		"text":         text,
+		"parse_mode":   "Markdown",
+		"reply_markup": keyboard,
+	}
+	b, _ := json.Marshal(payload)
+	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+}
+
+func sendSubMenu(token string, chatID int64, text string) {
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": "🔙 رجوع", "callback_data": "main_menu"}},
 		},
 	}
 
