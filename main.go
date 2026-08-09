@@ -8,20 +8,20 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
-// --- هيكلة البيانات الواردة من تيليجرام ---
+// --- هيكلة البيانات ---
 type TelegramUpdate struct {
-	UpdateID        int              `json:"update_id"`
 	Message         *Message         `json:"message"`
 	CallbackQuery   *CallbackQuery   `json:"callback_query"`
 	BusinessMessage *BusinessMessage `json:"business_message"`
 }
 
 type Message struct {
-	MessageID int    `json:"message_id"`
-	Chat      Chat   `json:"chat"`
-	From      User   `json:"from"`
+	MessageID int  `json:"message_id"`
+	Chat      Chat `json:"chat"`
+	From      User `json:"from"`
 	Text      string `json:"text"`
 }
 
@@ -48,198 +48,127 @@ type Chat struct {
 type User struct {
 	ID        int64  `json:"id"`
 	FirstName string `json:"first_name"`
-	IsBot     bool   `json:"is_bot"`
 }
 
-// --- هياكل إرسال البيانات ---
-type SendMessagePayload struct {
-	ChatID               int64       `json:"chat_id"`
-	Text                 string      `json:"text"`
-	BusinessConnectionID string      `json:"business_connection_id,omitempty"`
-	ReplyMarkup          interface{} `json:"reply_markup,omitempty"`
-}
-
-type DeleteMessagePayload struct {
-	ChatID    int64 `json:"chat_id"`
-	MessageID int   `json:"message_id"`
-}
-
-type InlineKeyboardMarkup struct {
-	InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
-}
-
-type InlineKeyboardButton struct {
-	Text         string `json:"text"`
-	CallbackData string `json:"callback_data"`
-}
-
-// --- متغيرات لتخزين حالة البوت (تعمل في الذاكرة المؤقتة) ---
+// --- متغيرات الحالة ---
 var (
-	isBotStopped = false
-	excludedIDs  = make(map[int64]bool)
-	waitingForID = make(map[int64]bool)
+	autoReplyText      = "مرحباً! أنا غير متوفر حالياً، سأرد عليك قريباً."
+	isStopped          = false
+	workingHoursOnly   = false // ميزة 4: تفعيل ساعات العمل
+	excludedIDs        = make(map[int64]bool)
+	keywords           = map[string]string{"سعر": "الأسعار تبدأ من 50 دولار.", "موقع": "موقعنا في العراق."}
+	
+	// حالة انتظار المدخلات
+	waitingForState = make(map[int64]string) 
+	waitingKey      = make(map[int64]string)
 )
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
-		http.Error(w, "Bot token not configured", http.StatusInternalServerError)
-		return
-	}
-
 	var update TelegramUpdate
-	err := json.NewDecoder(r.Body).Decode(&update)
-	if err != nil {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	json.NewDecoder(r.Body).Decode(&update)
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 
-	// 1. التعامل مع ضغطات الأزرار الشفافة (Callback Queries)
 	if update.CallbackQuery != nil {
-		handleCallbackQuery(botToken, update.CallbackQuery)
-		w.WriteHeader(http.StatusOK)
-		return
+		handleCallbacks(botToken, update.CallbackQuery)
+	} else if update.Message != nil {
+		handleMessages(botToken, update.Message)
+	} else if update.BusinessMessage != nil && !update.BusinessMessage.IsOutgoing {
+		handleBusiness(botToken, update.BusinessMessage)
 	}
-
-	// 2. التعامل مع الأوامر المباشرة في محادثة البوت (/start, /id) وإدخال الايدي
-	if update.Message != nil && update.Message.Text != "" {
-		handleDirectMessage(botToken, update.Message)
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	// 3. التعامل مع رسائل العملاء (Business Messages)
-	if update.BusinessMessage != nil && update.BusinessMessage.Text != "" {
-		handleBusinessMessage(botToken, update.BusinessMessage)
-	}
-
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("OK"))
 }
 
-// ==========================================
-// دوال معالجة الأحداث (للحفاظ على نظافة الكود)
-// ==========================================
+func handleBusiness(botToken string, msg *BusinessMessage) {
+	// 1. التحقق من الاستثناءات
+	if isStopped || excludedIDs[msg.From.ID] { return }
 
-func handleCallbackQuery(botToken string, cb *CallbackQuery) {
-	chatID := cb.Message.Chat.ID
-	msgID := cb.Message.MessageID
-	data := cb.Data
-
-	// حذف الرسالة التي تحتوي على الأزرار بعد الضغط عليها
-	deleteMessage(botToken, chatID, msgID)
-
-	switch data {
-	case "stop_reply":
-		isBotStopped = true
-		sendMessage(botToken, chatID, "🛑 تم إيقاف الرد التلقائي بنجاح.", nil, "")
-	case "start_reply":
-		isBotStopped = false
-		sendMessage(botToken, chatID, "🟢 تم تشغيل الرد التلقائي بنجاح.", nil, "")
-	case "exclude_account":
-		waitingForID[chatID] = true
-		txt := "ارسل ايدي حسابك الان لتعطيل الرد التلقائي من الظهور في محادثتك فقط\nاذا لا تعرف كيف استخراج ايدي حسابك يمكنك الضغط على هذا الامر\n/id\nسيظهر لك رقم انسخه وارسله في هذه المحادثة لأستثناء حسابك"
-		sendMessage(botToken, chatID, txt, nil, "")
+	// 2. ميزة ساعات العمل (من 22:00 إلى 08:00)
+	if workingHoursOnly {
+		hour := time.Now().Hour()
+		if hour >= 8 && hour < 22 { return }
 	}
 
-	// إبلاغ تيليجرام بنجاح الاستجابة للزر لمنع التحميل المستمر
-	answerCallbackQuery(botToken, cb.ID)
+	// 3. الردود الذكية (كلمات مفتاحية)
+	reply := autoReplyText
+	for k, v := range keywords {
+		if strings.Contains(strings.ToLower(msg.Text), strings.ToLower(k)) {
+			reply = v; break
+		}
+	}
+	sendMessage(botToken, msg.Chat.ID, reply, nil, msg.BusinessConnectionID)
 }
 
-func handleDirectMessage(botToken string, msg *Message) {
+func handleMessages(botToken string, msg *Message) {
 	chatID := msg.Chat.ID
-	text := strings.TrimSpace(msg.Text)
+	text := msg.Text
 
-	// إذا كان البوت ينتظر إرسال الايدي للاستثناء
-	if waitingForID[chatID] && text != "/id" && text != "/start" {
-		id, err := strconv.ParseInt(text, 10, 64)
-		if err == nil {
+	// معالجة المدخلات من المستخدم
+	if state, ok := waitingForState[chatID]; ok {
+		switch state {
+		case "edit_text":
+			autoReplyText = text
+			delete(waitingForState, chatID)
+			sendMessage(botToken, chatID, "✅ تم تحديث النص بنجاح!", nil, "")
+		case "add_key":
+			waitingKey[chatID] = text
+			waitingForState[chatID] = "add_val"
+			sendMessage(botToken, chatID, "أدخل الرد الخاص بهذه الكلمة:", nil, "")
+		case "add_val":
+			key := waitingKey[chatID]
+			keywords[key] = text
+			delete(waitingForState, chatID)
+			sendMessage(botToken, chatID, "✅ تمت إضافة الكلمة والرد بنجاح!", nil, "")
+		case "exclude_id":
+			id, _ := strconv.ParseInt(text, 10, 64)
 			excludedIDs[id] = true
-			waitingForID[chatID] = false
-			sendMessage(botToken, chatID, fmt.Sprintf("✅ تم استثناء الحساب ذو الايدي %d بنجاح من الرد التلقائي.", id), nil, "")
-		} else {
-			sendMessage(botToken, chatID, "❌ عذراً، الرقم غير صحيح. يرجى إرسال أرقام فقط (الايدي).", nil, "")
+			delete(waitingForState, chatID)
+			sendMessage(botToken, chatID, "✅ تم استثناء الحساب.", nil, "")
 		}
 		return
 	}
 
 	if text == "/start" {
-		txt := "أهلاً بك 🤖\nهذا البوت مخصص للرد التلقائي نيابة عنك لحسابك الشخصي.\nيمكنك من خلال هذه اللوحة التحكم الكامل بإيقاف أو تشغيل الردود، أو استثناء أشخاص محددين من الرد التلقائي نهائياً.\n\nاختر من الأزرار أدناه:"
-		
-		keyboard := InlineKeyboardMarkup{
-			InlineKeyboard: [][]InlineKeyboardButton{
-				{
-					{Text: "ايقاف/الرد 🛑", CallbackData: "stop_reply"},
-					{Text: "تشغيل/الرد 🟢", CallbackData: "start_reply"},
-				},
-				{
-					{Text: "استثناء/حسابي 👤", CallbackData: "exclude_account"},
-				},
-			},
-		}
-		sendMessage(botToken, chatID, txt, keyboard, "")
-	} else if text == "/id" {
-		sendMessage(botToken, chatID, fmt.Sprintf("الايدي الخاص بك هو:\n`%d`", msg.From.ID), nil, "")
+		sendMainMenu(botToken, chatID)
 	}
 }
 
-func handleBusinessMessage(botToken string, msg *BusinessMessage) {
-	// 1. التحقق من حالة الإيقاف العام أو الرسائل الصادرة
-	if isBotStopped || msg.IsOutgoing {
-		return
+func handleCallbacks(botToken string, cb *CallbackQuery) {
+	chatID := cb.Message.Chat.ID
+	switch cb.Data {
+	case "edit_text":
+		waitingForState[chatID] = "edit_text"
+		sendMessage(botToken, chatID, "أرسل النص الجديد للرد التلقائي الآن:", nil, "")
+	case "add_key":
+		waitingForState[chatID] = "add_key"
+		sendMessage(botToken, chatID, "أرسل الكلمة المفتاحية:", nil, "")
+	case "toggle_hours":
+		workingHoursOnly = !workingHoursOnly
+		sendMessage(botToken, chatID, fmt.Sprintf("⚙️ وضع العمل خارج الساعات: %v", workingHoursOnly), nil, "")
+	case "list_excluded":
+		txt := "قائمة المستثنين:\n"
+		for id := range excludedIDs { txt += fmt.Sprintf("- %d\n", id) }
+		sendMessage(botToken, chatID, txt, nil, "")
+	case "toggle_bot":
+		isStopped = !isStopped
+		sendMessage(botToken, chatID, fmt.Sprintf("حالة البوت: %v", !isStopped), nil, "")
 	}
-
-	// 2. التحقق من أن حساب الشخص المُراسل غير موجود في قائمة الاستثناء
-	senderID := msg.From.ID
-	if excludedIDs[senderID] {
-		return
-	}
-
-	// 3. إرسال الرد التلقائي
-	senderName := msg.From.FirstName
-	if senderName == "" {
-		senderName = "صديقي"
-	}
-
-	replyText := "مرحبا بك يا " + senderName + "\nانا غير متوفر الان يرجى ترك رسالتك\nوسأرد عليك قريبا"
-	
-	sendMessage(botToken, msg.Chat.ID, replyText, nil, msg.BusinessConnectionID)
 }
 
-// ==========================================
-// دوال الاتصال بـ API تيليجرام
-// ==========================================
-
-func sendMessage(botToken string, chatID int64, text string, replyMarkup interface{}, bizConnID string) {
-	apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
-	payload := SendMessagePayload{
-		ChatID:               chatID,
-		Text:                 text,
-		BusinessConnectionID: bizConnID,
-		ReplyMarkup:          replyMarkup,
+func sendMainMenu(botToken string, chatID int64) {
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": "تعديل النص 📝", "callback_data": "edit_text"}, {"text": "كلمة مفتاحية ➕", "callback_data": "add_key"}},
+			{{"text": "ساعات العمل ⏰", "callback_data": "toggle_hours"}, {"text": "المستثنون 👥", "callback_data": "list_excluded"}},
+			{{"text": "تشغيل/إيقاف ⚙️", "callback_data": "toggle_bot"}},
+		},
 	}
-	jsonPayload, _ := json.Marshal(payload)
-	http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
+	sendMessage(botToken, chatID, "لوحة التحكم الرئيسية:", keyboard, "")
 }
 
-func deleteMessage(botToken string, chatID int64, messageID int) {
-	apiURL := "https://api.telegram.org/bot" + botToken + "/deleteMessage"
-	payload := DeleteMessagePayload{
-		ChatID:    chatID,
-		MessageID: messageID,
+func sendMessage(botToken string, chatID int64, text string, replyMarkup interface{}, bizID string) {
+	payload := map[string]interface{}{
+		"chat_id": chatID, "text": text, "business_connection_id": bizID, "reply_markup": replyMarkup,
 	}
-	jsonPayload, _ := json.Marshal(payload)
-	http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
-}
-
-func answerCallbackQuery(botToken string, callbackQueryID string) {
-	apiURL := "https://api.telegram.org/bot" + botToken + "/answerCallbackQuery"
-	payload := map[string]string{"callback_query_id": callbackQueryID}
-	jsonPayload, _ := json.Marshal(payload)
-	http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
+	b, _ := json.Marshal(payload)
+	http.Post("https://api.telegram.org/bot"+botToken+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
