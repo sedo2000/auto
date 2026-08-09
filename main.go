@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
-	"sync"
 )
 
 type TelegramUpdate struct {
@@ -18,9 +17,11 @@ type TelegramUpdate struct {
 		From struct {
 			ID        int64  `json:"id"`
 			FirstName string `json:"first_name"`
+			IsBot     bool   `json:"is_bot"`
 		} `json:"from"`
 		Text                 string `json:"text"`
 		BusinessConnectionID string `json:"business_connection_id"`
+		IsOutgoing           bool   `json:"is_outgoing"` // معرفة ما إذا كانت الرسالة صادرة منك
 	} `json:"business_message"`
 }
 
@@ -28,46 +29,6 @@ type SendMessagePayload struct {
 	ChatID               int64  `json:"chat_id"`
 	Text                 string `json:"text"`
 	BusinessConnectionID string `json:"business_connection_id,omitempty"`
-}
-
-type TelegramUserResponse struct {
-	Ok     bool `json:"ok"`
-	Result struct {
-		FirstName string `json:"first_name"`
-		Username  string `json:"username"`
-	} `json:"result"`
-}
-
-// متغيرات لتخزين الاسم تلقائياً في الذاكرة المؤقتة لمنع التكرار
-var (
-	cachedOwnerName string
-	mu              sync.Mutex
-)
-
-// دالة لجلب اسم البوت/الحساب تلقائياً من تيليجرام
-func getOwnerName(botToken string) string {
-	mu.Lock()
-	defer mu.Unlock()
-
-	if cachedOwnerName != "" {
-		return cachedOwnerName
-	}
-
-	apiURL := "https://api.telegram.org/bot" + botToken + "/getMe"
-	resp, err := http.Get(apiURL)
-	if err != nil {
-		return "صاحب الحساب"
-	}
-	defer resp.Body.Close()
-
-	var userResp TelegramUserResponse
-	err = json.NewDecoder(resp.Body).Decode(&userResp)
-	if err != nil || !userResp.Ok {
-		return "صاحب الحساب"
-	}
-
-	cachedOwnerName = userResp.Result.FirstName
-	return cachedOwnerName
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
@@ -89,23 +50,35 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	text := update.BusinessMessage.Text
-	if text != "" {
-		chat := update.BusinessMessage.Chat.ID
+	msg := update.BusinessMessage
+
+	// 1. الشرط الأهم: إذا كانت الرسالة صادرة منك أنت (IsOutgoing == true)، يتوقف البوت فوراً ولا يرد
+	if msg.IsOutgoing {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+		return
+	}
+
+	// 2. التأكد من أن الرسالة تحتوي على نص وليست فارغة أو من بوت آخر
+	if msg.Text != "" && !msg.From.IsBot {
+		chat := msg.Chat.ID
 		if chat == 0 {
-			chat = update.BusinessMessage.From.ID
+			chat = msg.From.ID
 		}
 
-		// اكتشاف اسم صاحب الحساب تلقائياً عبر API
-		ownerName := getOwnerName(botToken)
+		// استخراج اسم الشخص المراسل (First Name)
+		senderName := msg.From.FirstName
+		if senderName == "" {
+			senderName = "صديقي"
+		}
 
-		// صياغة الرد التلقائي بالاسم المكتشف تلقائياً
-		replyText := "أهلاً وسهلاً، " + ownerName + " غير موجود حالياً. اترك رسالتك وسيرد عليك في أقرب وقت."
+		// صياغة الرسالة المطلوبة مع تضمين اسم الشخص
+		replyText := "مرحباً بك يا " + senderName + "\nانا غير متوفر الان عد في وقت اخر\nهذا رد تلقائي ."
 
 		payload := SendMessagePayload{
 			ChatID:               chat,
 			Text:                 replyText,
-			BusinessConnectionID: update.BusinessMessage.BusinessConnectionID,
+			BusinessConnectionID: msg.BusinessConnectionID,
 		}
 
 		jsonPayload, _ := json.Marshal(payload)
@@ -113,6 +86,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
 	}
 
-	w.WriteHeader(http.StatusOK)
+I	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
