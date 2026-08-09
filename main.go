@@ -4,11 +4,32 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
+
+// قائمة الاقتباسات
+var quotes = []string{
+	"قاوم ما تكره لتصل الى ما تحب",
+	"الحرب بين أنت ضد أنت",
+	"لا تسألني من أنا",
+	"أبنِ نفسك بنفسك لنفسك",
+	"ميخالف",
+	"حتى لو متأخر تگدر..!",
+	"من يعيش في خوف لن يكون حراً ابداً",
+	"لا أبرح حتى أبلغ",
+	"لا أجدني بينهم",
+	"كل شيء يريدك عندما لاتريد شيئاً",
+	"أنه مبرمج فحسب",
+	"أنا لا افكر فيك ابداً",
+	"ميو",
+	"المرء نتاج خلواته",
+	"لا مزيد من الأصدقاء المزيفين",
+}
 
 type BotConfig struct {
 	IsStopped bool    `json:"is_stopped"`
@@ -77,12 +98,22 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. التعامل مع الأزرار الشفافة في محادثة البوت
+	// 1. التعامل مع الضغط على الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
-		deleteMessage(botToken, cb.Message.Chat.ID, cb.Message.MessageID)
 
+		// أ) تغيير الاقتباس داخل الزر الشفاف عند ضغط العميل عليه
+		if cb.Data == "change_quote" {
+			rand.Seed(time.Now().UnixNano())
+			newQuote := quotes[rand.Intn(len(quotes))]
+			updateButtonQuote(botToken, cb.Message.Chat.ID, cb.Message.MessageID, newQuote)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// ب) لوحة تحكم الآدمن
+		deleteMessage(botToken, cb.Message.Chat.ID, cb.Message.MessageID)
 		adminID := cb.From.ID
 		config, msgID := getConfig(botToken, adminID)
 
@@ -130,10 +161,12 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. التعامل مع الأوامر والنصوص المباشرة في محادثة البوت
+	// 2. التعامل مع محادثة لوحة التحكم الخاصة بك
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
+
+		config, msgID := getConfig(botToken, chatID)
 
 		if msg.Text == "/start" {
 			sendMenu(botToken, chatID, "أهلاً بك في لوحة تحكم البوت 🤖\nاختر من الأزرار أدناه للتحكم الكامل:")
@@ -147,7 +180,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		config, msgID := getConfig(botToken, chatID)
 		if config.State == "waiting_text" {
 			config.AutoReply = msg.Text
 			config.State = ""
@@ -178,17 +210,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. الرد التلقائي على العملاء (Business Messages)
+	// 3. إرسال الرد التلقائي للعميل مع الزر الشفاف التفاعلي (Business Messages)
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 
-		// إذا كانت الرسالة صادرة منك أنت، تجاهلها فوراً
 		if msg.IsOutgoing {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
-		// استخراج الأيدي الخاص بك من اتصال الـ Business Connection
 		adminID := getAdminIDFromBusinessConn(botToken, msg.BusinessConnectionID)
 		if adminID == 0 {
 			w.WriteHeader(http.StatusOK)
@@ -197,23 +227,21 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 		config, _ := getConfig(botToken, adminID)
 
-		// 1. فحص هل البوت متوقف؟
 		if config.IsStopped {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
-		// 2. فحص هل أيدي الشخص موجود في قائمة الاستثناء؟
 		senderID := msg.From.ID
-		chatID := msg.Chat.ID
+		customerChatID := msg.Chat.ID
 		for _, exID := range config.Excluded {
-			if exID == senderID || exID == chatID {
+			if exID == senderID || exID == customerChatID {
 				w.WriteHeader(http.StatusOK)
 				return
 			}
 		}
 
-		// 3. إرسال الرد
+		// نص الرد التلقائي
 		replyText := config.AutoReply
 		if replyText == "" {
 			name := msg.From.FirstName
@@ -223,13 +251,13 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			replyText = "مرحبا بك يا " + name + "\nانا غير متوفر الان يرجى ترك رسالتك\nوسأرد عليك قريبا"
 		}
 
-		sendBusinessReply(botToken, msg.Chat.ID, replyText, msg.BusinessConnectionID)
+		// إرسال الرد للعميل وتحته زر شفاف يحتوي على اقتباس عشوائي
+		sendBusinessReplyWithQuoteButton(botToken, customerChatID, replyText, msg.BusinessConnectionID)
 	}
 
 	w.WriteHeader(http.StatusOK)
 }
 
-// جلب الأيدي الحقيقي لصاحب الحساب من اتصال الـ Business Connection
 func getAdminIDFromBusinessConn(token string, connID string) int64 {
 	if connID == "" {
 		return 0
@@ -381,14 +409,42 @@ func sendMessage(token string, chatID int64, text string) {
 	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
-func sendBusinessReply(token string, chatID int64, text, bizID string) {
+// إرسال الرد التلقائي للعميل ومعه زر الاقتباس الشفاف
+func sendBusinessReplyWithQuoteButton(token string, chatID int64, text, bizID string) {
+	rand.Seed(time.Now().UnixNano())
+	initialQuote := quotes[rand.Intn(len(quotes))]
+
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": "✨ " + initialQuote, "callback_data": "change_quote"}},
+		},
+	}
+
 	payload := map[string]interface{}{
 		"chat_id":                chatID,
 		"text":                   text,
 		"business_connection_id": bizID,
+		"reply_markup":           keyboard,
 	}
 	b, _ := json.Marshal(payload)
 	http.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+}
+
+// تحديث نص الزر الشفاف فقط عند ضغط العميل عليه
+func updateButtonQuote(token string, chatID int64, msgID int, newQuote string) {
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": "✨ " + newQuote, "callback_data": "change_quote"}},
+		},
+	}
+
+	payload := map[string]interface{}{
+		"chat_id":      chatID,
+		"message_id":   msgID,
+		"reply_markup": keyboard,
+	}
+	b, _ := json.Marshal(payload)
+	http.Post("https://api.telegram.org/bot"+token+"/editMessageReplyMarkup", "application/json", bytes.NewBuffer(b))
 }
 
 func deleteMessage(token string, chatID int64, msgID int) {
