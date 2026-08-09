@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"sync"
 )
 
 type TelegramUpdate struct {
@@ -29,6 +30,46 @@ type SendMessagePayload struct {
 	BusinessConnectionID string `json:"business_connection_id,omitempty"`
 }
 
+type TelegramUserResponse struct {
+	Ok     bool `json:"ok"`
+	Result struct {
+		FirstName string `json:"first_name"`
+		Username  string `json:"username"`
+	} `json:"result"`
+}
+
+// متغيرات لتخزين الاسم تلقائياً في الذاكرة المؤقتة لمنع التكرار
+var (
+	cachedOwnerName string
+	mu              sync.Mutex
+)
+
+// دالة لجلب اسم البوت/الحساب تلقائياً من تيليجرام
+func getOwnerName(botToken string) string {
+	mu.Lock()
+	defer mu.Unlock()
+
+	if cachedOwnerName != "" {
+		return cachedOwnerName
+	}
+
+	apiURL := "https://api.telegram.org/bot" + botToken + "/getMe"
+	resp, err := http.Get(apiURL)
+	if err != nil {
+		return "صاحب الحساب"
+	}
+	defer resp.Body.Close()
+
+	var userResp TelegramUserResponse
+	err = json.NewDecoder(resp.Body).Decode(&userResp)
+	if err != nil || !userResp.Ok {
+		return "صاحب الحساب"
+	}
+
+	cachedOwnerName = userResp.Result.FirstName
+	return cachedOwnerName
+}
+
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -48,15 +89,19 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// تحقق من أن الرسالة الواردة تحتوي على نص
-	if update.BusinessMessage.Text != "" {
+	text := update.BusinessMessage.Text
+	if text != "" {
 		chat := update.BusinessMessage.Chat.ID
 		if chat == 0 {
 			chat = update.BusinessMessage.From.ID
 		}
 
-		// تجهيز الرد
-		replyText := "مرحباً! لقد تلقيت رسالتك بشكل آلي."
+		// اكتشاف اسم صاحب الحساب تلقائياً عبر API
+		ownerName := getOwnerName(botToken)
+
+		// صياغة الرد التلقائي بالاسم المكتشف تلقائياً
+		replyText := "أهلاً وسهلاً، " + ownerName + " غير موجود حالياً. اترك رسالتك وسيرد عليك في أقرب وقت."
+
 		payload := SendMessagePayload{
 			ChatID:               chat,
 			Text:                 replyText,
@@ -64,8 +109,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		jsonPayload, _ := json.Marshal(payload)
-
-		// إرسال الطلب إلى Telegram API
 		apiURL := "https://api.telegram.org/bot" + botToken + "/sendMessage"
 		http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
 	}
