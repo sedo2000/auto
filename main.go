@@ -79,8 +79,13 @@ var translations = map[string]map[string]string{
 		"bio_updated":             "✅ تم تعديل النبذة بنجاح!",
 		"username_updated":        "✅ تم تعديل اسم المستخدم بنجاح!",
 		"photo_updated":           "✅ تم تعديل صورة الملف الشخصي بنجاح!",
-		"story_prompt":            "📖 أرسل الآن صورة أو فيديو (حد أقصى 60 ثانية) لنشره كقصة (ستُنشر لمدة 24 ساعة):",
-		"story_updated":           "✅ تم نشر القصة بنجاح! ستبقى ظاهرة لمدة 24 ساعة.",
+		"select_story_duration":   "⏱️ اختر مدة ظهور القصة المطلوبة:",
+		"dur_6h":                  "6 ساعات",
+		"dur_12h":                 "12 ساعة",
+		"dur_24h":                 "24 ساعة",
+		"dur_48h":                 "48 ساعة",
+		"story_prompt":            "📖 أرسل الآن صورة أو فيديو (حد أقصى 60 ثانية) لنشره كقصة (ستبقى ظاهرة لمدة %s):",
+		"story_updated":           "✅ تم نشر القصة بنجاح! ستبقى ظاهرة لمدة %s.",
 		"your_id_msg":             "الايدي الخاص بك هو:\n`%d`",
 		"fail_name":               "❌ فشل تعديل الاسم: %s",
 		"fail_bio":                "❌ فشل تعديل النبذة: %s",
@@ -129,8 +134,13 @@ var translations = map[string]map[string]string{
 		"bio_updated":             "✅ Bio updated successfully!",
 		"username_updated":        "✅ Username updated successfully!",
 		"photo_updated":           "✅ Profile photo updated successfully!",
-		"story_prompt":            "📖 Send a photo or video now (max 60 seconds) to post as a story (visible for 24 hours):",
-		"story_updated":           "✅ Story posted successfully! It will remain visible for 24 hours.",
+		"select_story_duration":   "⏱️ Select story duration:",
+		"dur_6h":                  "6 Hours",
+		"dur_12h":                 "12 Hours",
+		"dur_24h":                 "24 Hours",
+		"dur_48h":                 "48 Hours",
+		"story_prompt":            "📖 Send a photo or video now (max 60 seconds) to post as a story (visible for %s):",
+		"story_updated":           "✅ Story posted successfully! It will remain visible for %s.",
 		"your_id_msg":             "Your ID is:\n`%d`",
 		"fail_name":               "❌ Failed to update name: %s",
 		"fail_bio":                "❌ Failed to update bio: %s",
@@ -151,6 +161,21 @@ func tr(lang, key string) string {
 		return val
 	}
 	return key
+}
+
+func getDurationLabel(lang, period string) string {
+	switch period {
+	case "21600":
+		return tr(lang, "dur_6h")
+	case "43200":
+		return tr(lang, "dur_12h")
+	case "86400":
+		return tr(lang, "dur_24h")
+	case "172800":
+		return tr(lang, "dur_48h")
+	default:
+		return tr(lang, "dur_24h")
+	}
 }
 
 type BotConfig struct {
@@ -178,7 +203,6 @@ type TelegramUpdate struct {
 		IsOutgoing           bool   `json:"is_outgoing"`
 		BusinessConnectionID string `json:"business_connection_id"`
 	} `json:"business_message"`
-	// يصل هذا التحديث عند تفعيل أو تعديل أو إيقاف ربط حساب تجاري بالبوت
 	BusinessConnection *struct {
 		ID   string `json:"id"`
 		User struct {
@@ -356,9 +380,13 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 				sendMenu(botToken, adminID, lang, tr(lang, "no_business_connection"))
 				break
 			}
-			config.State = "waiting_story"
+			sendStoryDurationMenu(botToken, adminID, lang)
+		case "story_dur_21600", "story_dur_43200", "story_dur_86400", "story_dur_172800":
+			period := strings.TrimPrefix(cb.Data, "story_dur_")
+			config.State = "waiting_story_" + period
 			saveConfig(botToken, adminID, config, msgID)
-			sendSubMenu(botToken, adminID, lang, tr(lang, "story_prompt"))
+			durationTxt := getDurationLabel(lang, period)
+			sendSubMenu(botToken, adminID, lang, fmt.Sprintf(tr(lang, "story_prompt"), durationTxt))
 		case "lang_ar":
 			config.Lang = "ar"
 			config.State = ""
@@ -463,23 +491,25 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 					sendMenu(botToken, chatID, lang, tr(lang, "photo_updated"))
 				}
 			}
-		} else if config.State == "waiting_story" {
+		} else if strings.HasPrefix(config.State, "waiting_story_") {
+			period := strings.TrimPrefix(config.State, "waiting_story_")
 			if len(msg.Photo) == 0 && msg.Video == nil {
 				sendSubMenu(botToken, chatID, lang, tr(lang, "need_real_media_story"))
 			} else {
 				var err error
 				if msg.Video != nil {
-					err = postBusinessStory(botToken, config.BusinessConnID, "video", msg.Video.FileID, msg.Video.Duration, lang)
+					err = postBusinessStory(botToken, config.BusinessConnID, "video", msg.Video.FileID, msg.Video.Duration, period, lang)
 				} else {
 					fileID := msg.Photo[len(msg.Photo)-1].FileID
-					err = postBusinessStory(botToken, config.BusinessConnID, "photo", fileID, 0, lang)
+					err = postBusinessStory(botToken, config.BusinessConnID, "photo", fileID, 0, period, lang)
 				}
 				if err != nil {
 					sendSubMenu(botToken, chatID, lang, fmt.Sprintf(tr(lang, "fail_story"), err.Error()))
 				} else {
 					config.State = ""
 					saveConfig(botToken, chatID, config, msgID)
-					sendMenu(botToken, chatID, lang, tr(lang, "story_updated"))
+					durationTxt := getDurationLabel(lang, period)
+					sendMenu(botToken, chatID, lang, fmt.Sprintf(tr(lang, "story_updated"), durationTxt))
 				}
 			}
 		}
@@ -519,7 +549,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// تجهيز اسم العميل (هذا النص للعملاء وليس جزءاً من إعدادات لوحة التحكم، يبقى بالعربي)
 		customerName := msg.From.FirstName
 		if customerName == "" {
 			customerName = "صديقي"
@@ -713,6 +742,27 @@ func sendMenu(token string, chatID int64, lang, text string) {
 	}
 }
 
+func sendStoryDurationMenu(token string, chatID int64, lang string) {
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": "⏱️ " + tr(lang, "dur_6h"), "callback_data": "story_dur_21600"}, {"text": "⏱️ " + tr(lang, "dur_12h"), "callback_data": "story_dur_43200"}},
+			{{"text": "⏱️ " + tr(lang, "dur_24h"), "callback_data": "story_dur_86400"}, {"text": "⏱️ " + tr(lang, "dur_48h"), "callback_data": "story_dur_172800"}},
+			{{"text": tr(lang, "back_btn"), "callback_data": "main_menu"}},
+		},
+	}
+
+	payload := map[string]interface{}{
+		"chat_id":      chatID,
+		"text":         tr(lang, "select_story_duration"),
+		"parse_mode":   "Markdown",
+		"reply_markup": keyboard,
+	}
+	b, _ := json.Marshal(payload)
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ sendStoryDurationMenu:", err)
+	}
+}
+
 func sendProfileMenu(token string, chatID int64, lang, text string) {
 	keyboard := map[string]interface{}{
 		"inline_keyboard": [][]map[string]string{
@@ -806,7 +856,6 @@ func updateButtonQuote(token string, chatID int64, msgID int, newQuote string) {
 	}
 }
 
-// إرسال إشعار للمطوّر عند تفعيل البوت على حساب تجاري جديد
 func notifyDeveloper(token string, userID int64, firstName, lastName, username string) {
 	devChatID := os.Getenv("DEVELOPER_CHAT_ID")
 	if devChatID == "" {
@@ -847,7 +896,6 @@ type apiResult struct {
 	Description string `json:"description"`
 }
 
-// تنزيل بيانات ملف (صورة/فيديو) من تليجرام عبر file_id
 func downloadTelegramFile(token, fileID string) ([]byte, error) {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s", token, fileID)
 	resp, err := mediaClient.Get(url)
@@ -889,7 +937,6 @@ func downloadTelegramFile(token, fileID string) ([]byte, error) {
 	return data, nil
 }
 
-// إرسال طلب multipart/form-data يحتوي ملف خام + حقول JSON نصية إلى تليجرام
 func postMultipartBusinessAPI(token, method string, fields map[string]string, fileFieldName, fileName string, fileBytes []byte) error {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -991,8 +1038,6 @@ func setBusinessAccountUsername(token, businessConnID, username string) error {
 	return callBusinessAPI(token, "setBusinessAccountUsername", payload)
 }
 
-// تعديل صورة الملف الشخصي: يتطلب تليجرام رفع بيانات الصورة كملف جديد فعلياً
-// (لا يقبل إعادة استخدام file_id جاهز)، لذلك ننزّل الصورة أولاً ثم نرفعها.
 func setBusinessAccountProfilePhoto(token, businessConnID, fileID string) error {
 	data, err := downloadTelegramFile(token, fileID)
 	if err != nil {
@@ -1007,8 +1052,8 @@ func setBusinessAccountProfilePhoto(token, businessConnID, fileID string) error 
 	return postMultipartBusinessAPI(token, "setBusinessAccountProfilePhoto", fields, "photo", "photo.jpg", data)
 }
 
-// نشر قصة (صورة أو فيديو): نفس مبدأ تعديل الصورة، يتطلب رفع ملف جديد فعلياً
-func postBusinessStory(token, businessConnID, mediaType, fileID string, durationSeconds int, lang string) error {
+// نشر قصة (صورة أو فيديو) مع تمرير المدة المحددة بالثواني (21600, 43200, 86400, 172800)
+func postBusinessStory(token, businessConnID, mediaType, fileID string, durationSeconds int, activePeriod string, lang string) error {
 	if mediaType == "video" && durationSeconds > 60 {
 		return fmt.Errorf(tr(lang, "video_too_long_error"))
 	}
@@ -1031,11 +1076,14 @@ func postBusinessStory(token, businessConnID, mediaType, fileID string, duration
 		fileName = "story.jpg"
 	}
 
+	if activePeriod == "" {
+		activePeriod = "86400"
+	}
+
 	fields := map[string]string{
 		"business_connection_id": businessConnID,
 		"content":                contentJSON,
-		// المدة المسموحة: 21600 (6س) / 43200 (12س) / 86400 (24س) / 172800 (48س)
-		"active_period": "86400",
+		"active_period":          activePeriod,
 	}
 	return postMultipartBusinessAPI(token, "postStory", fields, "content", fileName, data)
 }
