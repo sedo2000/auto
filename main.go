@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 )
 
 type TelegramUpdate struct {
@@ -31,6 +32,15 @@ type SendMessagePayload struct {
 	BusinessConnectionID string `json:"business_connection_id,omitempty"`
 }
 
+type DeleteMessagePayload struct {
+	ChatID    int64 `json:"chat_id"`
+	MessageID int   `json:"message_id"`
+}
+
+// تخزين مؤقت لحالة المحادثات المتوقفة (مفتاح خارجي لرقم المحادثة)
+// ملاحظة: في بيئة السيرفرليس قد تُعاد ذاكرة الكود، ولكنها تفيد في الجلسات النشطة
+var stoppedChats = make(map[int64]bool)
+
 func Handler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -51,28 +61,47 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := update.BusinessMessage
+	chat := msg.Chat.ID
+	if chat == 0 {
+		chat = msg.From.ID
+	}
 
-	// إذا كانت الرسالة صادرة منك أنت (أي أنك قمت بالرد)، يتوقف البوت فوراً ولا يرد
+	// 1. إذا كانت الرسالة صادرة منك أنت (أوامر التحكم أو الردود العادية)
 	if msg.IsOutgoing {
+		textTrimmed := strings.TrimSpace(msg.Text)
+
+		// إذا أرسلت أنت كلمة "إيقاف"
+		if textTrimmed == "إيقاف" {
+			stoppedChats[chat] = true
+			deleteMessage(botToken, chat, msg.MessageID)
+		} else if textTrimmed == "تشغيل" {
+			// إذا أرسلت أنت كلمة "تشغيل"
+			delete(stoppedChats, chat)
+			deleteMessage(botToken, chat, msg.MessageID)
+		} else {
+			// أي رسالة عادية ترد بها أنت على الشخص، سيقوم البوت تلقائياً بإيقاف الرد الآلي مؤقتاً لهذه المحادثة وحذف الحاجة لتكرار الرد
+			stoppedChats[chat] = true
+		}
+
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 		return
 	}
 
-	// التأكد من أن الرسالة واردة وتحتوي على نص وليست من بوت
-	if msg.Text != "" && !msg.From.IsBot {
-		chat := msg.Chat.ID
-		if chat == 0 {
-			chat = msg.From.ID
-		}
+	// 2. إذا كانت المحادثة متوقفة بناءً على طلبك، لا تقم بالرد نهائياً
+	if stoppedChats[chat] {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("OK"))
+		return
+	}
 
-		// جلب اسم الشخص المراسل
+	// 3. الرد الآلي على الشخص المراسل
+	if msg.Text != "" && !msg.From.IsBot {
 		senderName := msg.From.FirstName
 		if senderName == "" {
 			senderName = "صديقي"
 		}
 
-		// صياغة الرد بالترتيب والدقة المطلوبة
 		replyText := "مرحبا بك يا " + senderName + "\nانا غير متوفر الان يرجى ترك رسالتك\nوسأرد عليك قريبا"
 
 		payload := SendMessagePayload{
@@ -88,4 +117,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
+}
+
+// دالة لحذف رسائلك (مثل أمر إيقاف أو تشغيل) تلقائياً لكي تبقى المحادثة نظيفة
+func deleteMessage(botToken string, chatID int64, messageID int) {
+	payload := DeleteMessagePayload{
+		ChatID:    chatID,
+		MessageID: messageID,
+	}
+	jsonPayload, _ := json.Marshal(payload)
+	apiURL := "https://api.telegram.org/bot" + botToken + "/deleteMessage"
+	http.Post(apiURL, "application/json", bytes.NewBuffer(jsonPayload))
 }
