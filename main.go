@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -176,6 +177,52 @@ func getDurationLabel(lang, period string) string {
 	default:
 		return tr(lang, "dur_24h")
 	}
+}
+
+// دالة الترجمة الفورية والكشف التلقائي عن لغة النص
+func translateText(text, targetLang string) (string, string, error) {
+	if strings.TrimSpace(text) == "" {
+		return "", "", nil
+	}
+	endpoint := fmt.Sprintf(
+		"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=%s&dt=t&q=%s",
+		targetLang, url.QueryEscape(text),
+	)
+
+	resp, err := httpClient.Get(endpoint)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+
+	var result []interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", "", err
+	}
+
+	if len(result) == 0 {
+		return "", "", fmt.Errorf("فشل الترجمة")
+	}
+
+	translatedText := ""
+	if sentences, ok := result[0].([]interface{}); ok {
+		for _, sentence := range sentences {
+			if s, ok := sentence.([]interface{}); ok && len(s) > 0 {
+				if tText, ok := s[0].(string); ok {
+					translatedText += tText
+				}
+			}
+		}
+	}
+
+	detectedLang := ""
+	if len(result) > 2 {
+		if lang, ok := result[2].(string); ok {
+			detectedLang = lang
+		}
+	}
+
+	return translatedText, detectedLang, nil
 }
 
 type BotConfig struct {
@@ -554,6 +601,23 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			customerName = "صديقي"
 		}
 
+		// --- الترجمة الفورية وتحديد اللغة للرسائل القادمة ---
+		var detectedLang string
+		if strings.TrimSpace(msg.Text) != "" {
+			translatedToAr, dLang, err := translateText(msg.Text, "ar")
+			if err == nil && dLang != "" {
+				detectedLang = dLang
+				// إذا كانت الرسالة بلغة غير العربية، يرسل البوت إشعاراً مترجماً لك في محادثة التحكم
+				if detectedLang != "ar" && adminID != 0 {
+					notifyMsg := fmt.Sprintf(
+						"🌐 *رسالة جديدة بلغة مترجمة (`%s`)*\n👤 *العميل:* %s (`%d`)\n\n💬 *النص الأصلي:*\n%s\n\n✨ *الترجمة للعربية:*\n%s",
+						detectedLang, customerName, senderID, msg.Text, translatedToAr,
+					)
+					sendMessage(botToken, adminID, notifyMsg)
+				}
+			}
+		}
+
 		var replyText string
 		if strings.TrimSpace(msg.Text) == "" {
 			replyText = "شكراً لتواصلك يا " + customerName + " 🌸\nاستلمت رسالتك وسأرد عليك قريباً."
@@ -564,6 +628,13 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			replyText = strings.ReplaceAll(replyText, "{الاسم}", customerName)
 		} else {
 			replyText = "أهلاً بك يا " + customerName + " 🌸\n" + config.AutoReply
+		}
+
+		// إذا كانت لغة العميل أجنبية، يترجم البوت نص الرد التلقائي إلى لغة العميل تلقائياً قبل إرساله!
+		if detectedLang != "" && detectedLang != "ar" {
+			if translatedReply, _, err := translateText(replyText, detectedLang); err == nil && translatedReply != "" {
+				replyText = translatedReply
+			}
 		}
 
 		sendBusinessReplyWithQuoteButton(botToken, customerChatID, replyText, msg.BusinessConnectionID)
@@ -1052,7 +1123,6 @@ func setBusinessAccountProfilePhoto(token, businessConnID, fileID string) error 
 	return postMultipartBusinessAPI(token, "setBusinessAccountProfilePhoto", fields, "photo", "photo.jpg", data)
 }
 
-// نشر قصة (صورة أو فيديو) مع تمرير المدة المحددة بالثواني (21600, 43200, 86400, 172800)
 func postBusinessStory(token, businessConnID, mediaType, fileID string, durationSeconds int, activePeriod string, lang string) error {
 	if mediaType == "video" && durationSeconds > 60 {
 		return fmt.Errorf(tr(lang, "video_too_long_error"))
