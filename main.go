@@ -51,6 +51,9 @@ var translations = map[string]map[string]string{
 		"exclude_btn":             "👤 استثناء حساب",
 		"list_excluded_btn":       "📋 عرض المستثنين",
 		"clear_excluded_btn":      "🧹 مسح المستثنين",
+		"mute_btn":                "🔇 كتم حساب",
+		"list_muted_btn":          "📜 عرض المكتومين",
+		"clear_muted_btn":         "🧹 مسح المكتومين",
 		"profile_menu_btn":        "🧑 إدارة الملف الشخصي",
 		"post_story_btn":          "📖 نشر قصة",
 		"lang_ar_btn":             "🇮🇶 العربية",
@@ -61,11 +64,20 @@ var translations = map[string]map[string]string{
 		"edit_text_prompt":        "📝 أرسل الآن نص الرد التلقائي الجديد:",
 		"saved_text_msg":          "✅ تم حفظ نص الرد التلقائي الجديد بنجاح!",
 		"exclude_prompt":          "👤 أرسل ايدي الحساب المراد استثناؤه الآن:",
+		"mute_prompt":             "🔇 أرسل ايدي الحساب المراد كتمه الآن:",
 		"invalid_id_msg":          "❌ أرقام فقط! أرسل الايدي بشكل صحيح.",
 		"id_added_msg":            "✅ تم إضافة الايدي `%d` إلى قائمة الاستثناء.",
+		"muted_added_msg":          "✅ تم إضافة الايدي `%d` إلى قائمة الكتم.",
 		"list_excluded_title":     "📋 **قائمة الحسابات المستثناة:**\n",
+		"list_muted_title":        "📜 **قائمة الحسابات المكتومة:**\n",
 		"no_excluded":             "لا يوجد حسابات مستثناة حالياً.",
+		"no_muted":                "لا يوجد حسابات مكتومة حالياً.",
 		"cleared_excluded_msg":    "🧹 تم مسح جميع الاستثناءات بنجاح.",
+		"cleared_muted_msg":       "🧹 تم مسح جميع المكتومين بنجاح.",
+		"muted_user_notice":       "🔒 أنت مكتوم حالياً. إلغاء الكتم راجع لصاحب الحساب فقط.",
+		"unmute_btn":              "🔓 إلغاء الكتم",
+		"unmute_not_owner":       "❌ عذراً، هذا الأمر راجع لصاحب الحساب فقط ولا يمكنك إلغاء كتم نفسك.",
+		"unmuted_success":         "✅ تم إلغاء الكتم عن هذا المستخدم بنجاح.",
 		"profile_menu_title":      "🧑 إدارة الملف الشخصي - اختر ما تريد تعديله:",
 		"edit_first_name_btn":     "✏️ تعديل الاسم",
 		"edit_bio_btn":            "📝 تعديل النبذة",
@@ -106,6 +118,9 @@ var translations = map[string]map[string]string{
 		"exclude_btn":             "👤 Exclude Account",
 		"list_excluded_btn":       "📋 View Excluded",
 		"clear_excluded_btn":      "🧹 Clear Excluded",
+		"mute_btn":                "🔇 Mute Account",
+		"list_muted_btn":          "📜 View Muted",
+		"clear_muted_btn":         "🧹 Clear Muted",
 		"profile_menu_btn":        "🧑 Manage Profile",
 		"post_story_btn":          "📖 Post Story",
 		"lang_ar_btn":             "🇮🇶 العربية",
@@ -116,11 +131,20 @@ var translations = map[string]map[string]string{
 		"edit_text_prompt":        "📝 Send the new auto-reply text now:",
 		"saved_text_msg":          "✅ New auto-reply text saved successfully!",
 		"exclude_prompt":          "👤 Send the account ID to exclude now:",
+		"mute_prompt":             "🔇 Send the account ID to mute now:",
 		"invalid_id_msg":          "❌ Numbers only! Please send a valid ID.",
 		"id_added_msg":            "✅ ID `%d` added to the exclusion list.",
+		"muted_added_msg":          "✅ ID `%d` added to the muted list.",
 		"list_excluded_title":     "📋 **Excluded Accounts:**\n",
+		"list_muted_title":        "📜 **Muted Accounts:**\n",
 		"no_excluded":             "No excluded accounts currently.",
+		"no_muted":                "No muted accounts currently.",
 		"cleared_excluded_msg":    "🧹 All exclusions cleared successfully.",
+		"cleared_muted_msg":       "🧹 All muted accounts cleared successfully.",
+		"muted_user_notice":       "🔒 You are currently muted. Unmuting is up to the account owner.",
+		"unmute_btn":              "🔓 Unmute",
+		"unmute_not_owner":       "❌ Sorry, this action is for the account owner only.",
+		"unmuted_success":         "✅ User unmuted successfully.",
 		"profile_menu_title":      "🧑 Manage Profile - choose what to edit:",
 		"edit_first_name_btn":     "✏️ Edit Name",
 		"edit_bio_btn":            "📝 Edit Bio",
@@ -229,6 +253,7 @@ type BotConfig struct {
 	IsStopped      bool    `json:"is_stopped"`
 	AutoReply      string  `json:"auto_reply"`
 	Excluded       []int64 `json:"excluded"`
+	Muted          []int64 `json:"muted"`
 	State          string  `json:"state"`
 	BusinessConnID string  `json:"business_conn_id"`
 	Lang           string  `json:"lang"`
@@ -250,6 +275,13 @@ type TelegramUpdate struct {
 		IsOutgoing           bool   `json:"is_outgoing"`
 		BusinessConnectionID string `json:"business_connection_id"`
 	} `json:"business_message"`
+	DeletedBusinessMessages *struct {
+		BusinessConnectionID string `json:"business_connection_id"`
+		Chat                 struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+		MessageIDs []int `json:"message_ids"`
+	} `json:"deleted_business_messages"`
 	BusinessConnection *struct {
 		ID   string `json:"id"`
 		User struct {
@@ -335,15 +367,46 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	// 1. معالجة الضغط على الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
-		answerCallback(botToken, cb.ID)
 
 		if cb.Data == "change_quote" {
+			answerCallback(botToken, cb.ID)
 			newQuote := quotes[rand.Intn(len(quotes))]
 			updateButtonQuote(botToken, cb.Message.Chat.ID, cb.Message.MessageID, newQuote)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
+		// معالجة زر إلغاء الكتم داخل المحادثات الشريكة (Unmute Button)
+		if strings.HasPrefix(cb.Data, "unmute_") {
+			targetIDStr := strings.TrimPrefix(cb.Data, "unmute_")
+			targetID, _ := strconv.ParseInt(targetIDStr, 10, 64)
+
+			// إذا كان الضغاط هو الشخص المكتوم نفسه، يتم رفض طلب الكتم عبر تنبيه pop-up
+			if cb.From.ID == targetID {
+				answerCallbackWithAlert(botToken, cb.ID, tr("ar", "unmute_not_owner"), true)
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+
+			// صاحب الحساب هو من ضغط على الزر -> إلغاء الكتم
+			answerCallback(botToken, cb.ID)
+			config, msgID := getConfig(botToken, cb.From.ID)
+
+			newMuted := []int64{}
+			for _, mID := range config.Muted {
+				if mID != targetID {
+					newMuted = append(newMuted, mID)
+				}
+			}
+			config.Muted = newMuted
+			saveConfig(botToken, cb.From.ID, config, msgID)
+
+			editMessageText(botToken, cb.Message.Chat.ID, cb.Message.MessageID, tr(config.Lang, "unmuted_success"))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		answerCallback(botToken, cb.ID)
 		deleteMessage(botToken, cb.Message.Chat.ID, cb.Message.MessageID)
 		adminID := cb.From.ID
 		config, msgID := getConfig(botToken, adminID)
@@ -372,6 +435,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			config.State = "waiting_id"
 			saveConfig(botToken, adminID, config, msgID)
 			sendSubMenu(botToken, adminID, lang, tr(lang, "exclude_prompt"))
+		case "mute":
+			config.State = "waiting_mute_id"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, lang, tr(lang, "mute_prompt"))
 		case "list_excluded":
 			txt := tr(lang, "list_excluded_title")
 			if len(config.Excluded) == 0 {
@@ -382,10 +449,24 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			sendSubMenu(botToken, adminID, lang, txt)
+		case "list_muted":
+			txt := tr(lang, "list_muted_title")
+			if len(config.Muted) == 0 {
+				txt += tr(lang, "no_muted")
+			} else {
+				for _, id := range config.Muted {
+					txt += fmt.Sprintf("- `%d`\n", id)
+				}
+			}
+			sendSubMenu(botToken, adminID, lang, txt)
 		case "clear_excluded":
 			config.Excluded = []int64{}
 			saveConfig(botToken, adminID, config, msgID)
 			sendMenu(botToken, adminID, lang, tr(lang, "cleared_excluded_msg"))
+		case "clear_muted":
+			config.Muted = []int64{}
+			saveConfig(botToken, adminID, config, msgID)
+			sendMenu(botToken, adminID, lang, tr(lang, "cleared_muted_msg"))
 		case "profile_menu":
 			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
@@ -494,6 +575,25 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				sendSubMenu(botToken, chatID, lang, tr(lang, "invalid_id_msg"))
 			}
+		} else if config.State == "waiting_mute_id" {
+			id, err := strconv.ParseInt(strings.TrimSpace(msg.Text), 10, 64)
+			if err == nil {
+				alreadyExists := false
+				for _, m := range config.Muted {
+					if m == id {
+						alreadyExists = true
+						break
+					}
+				}
+				if !alreadyExists {
+					config.Muted = append(config.Muted, id)
+				}
+				config.State = ""
+				saveConfig(botToken, chatID, config, msgID)
+				sendMenu(botToken, chatID, lang, fmt.Sprintf(tr(lang, "muted_added_msg"), id))
+			} else {
+				sendSubMenu(botToken, chatID, lang, tr(lang, "invalid_id_msg"))
+			}
 		} else if config.State == "waiting_first_name" {
 			parts := strings.SplitN(strings.TrimSpace(msg.Text), " ", 2)
 			firstName := parts[0]
@@ -580,15 +680,34 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		config, _ := getConfig(botToken, adminID)
+		// --- ميزة حفظ وتوفير نسخة احتياطية فورية من المحتوى/الوسائط تلقائياً ---
+		copyMessage(botToken, adminID, msg.Chat.ID, msg.MessageID)
 
-		if config.IsStopped {
+		config, _ := getConfig(botToken, adminID)
+		senderID := msg.From.ID
+		customerChatID := msg.Chat.ID
+		customerName := msg.From.FirstName
+		if customerName == "" {
+			customerName = "صديقي"
+		}
+
+		// --- فحص الكتم بالايدي ---
+		isMuted := false
+		for _, mID := range config.Muted {
+			if mID == senderID || mID == customerChatID {
+				isMuted = true
+				break
+			}
+		}
+
+		if isMuted {
+			// إرسال رد الكتم مع زر إلغاء الكتم الشفاف
+			sendMuteNotice(botToken, customerChatID, senderID, msg.BusinessConnectionID, config.Lang)
 			w.WriteHeader(http.StatusOK)
 			return
 		}
 
-		senderID := msg.From.ID
-		customerChatID := msg.Chat.ID
+		// --- فحص الاستثناء من الرد التلقائي ---
 		for _, exID := range config.Excluded {
 			if exID == senderID || exID == customerChatID {
 				w.WriteHeader(http.StatusOK)
@@ -596,9 +715,18 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		customerName := msg.From.FirstName
-		if customerName == "" {
-			customerName = "صديقي"
+		// --- فحص الروابط تلقائياً وإرسال تنبيه في محادثة التحكم ---
+		if strings.Contains(msg.Text, "http://") || strings.Contains(msg.Text, "https://") || strings.Contains(msg.Text, "t.me/") {
+			linkAlert := fmt.Sprintf(
+				"🔗 *تنبيه رابط وارد من عميل*\n👤 *العميل:* %s (`%d`)\n💬 *نص الرسالة:*\n%s",
+				customerName, senderID, msg.Text,
+			)
+			sendMessage(botToken, adminID, linkAlert)
+		}
+
+		if config.IsStopped {
+			w.WriteHeader(http.StatusOK)
+			return
 		}
 
 		// --- الترجمة الفورية وتحديد اللغة للرسائل القادمة ---
@@ -607,7 +735,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			translatedToAr, dLang, err := translateText(msg.Text, "ar")
 			if err == nil && dLang != "" {
 				detectedLang = dLang
-				// إذا كانت الرسالة بلغة غير العربية، يرسل البوت إشعاراً مترجماً لك في محادثة التحكم
 				if detectedLang != "ar" && adminID != 0 {
 					notifyMsg := fmt.Sprintf(
 						"🌐 *رسالة جديدة بلغة مترجمة (`%s`)*\n👤 *العميل:* %s (`%d`)\n\n💬 *النص الأصلي:*\n%s\n\n✨ *الترجمة للعربية:*\n%s",
@@ -630,7 +757,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			replyText = "أهلاً بك يا " + customerName + " 🌸\n" + config.AutoReply
 		}
 
-		// إذا كانت لغة العميل أجنبية، يترجم البوت نص الرد التلقائي إلى لغة العميل تلقائياً قبل إرساله!
 		if detectedLang != "" && detectedLang != "ar" {
 			if translatedReply, _, err := translateText(replyText, detectedLang); err == nil && translatedReply != "" {
 				replyText = translatedReply
@@ -642,7 +768,26 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. رصد تفعيل/تعديل ربط حساب تجاري جديد بالبوت وإشعار المطوّر
+	// 4. معالجة حادثة حذف الرسائل والوسائط (Deleted Business Messages)
+	if update.DeletedBusinessMessages != nil {
+		del := update.DeletedBusinessMessages
+		adminID := getAdminIDFromBusinessConn(botToken, del.BusinessConnectionID)
+		if adminID != 0 {
+			msgIDsStr := ""
+			for _, id := range del.MessageIDs {
+				msgIDsStr += fmt.Sprintf("`%d` ", id)
+			}
+			delAlert := fmt.Sprintf(
+				"🗑️ *تنبيه: قام العميل بحذف رسائل من المحادثة!*\n🆔 *معرف المحادثة:* `%d`\n🔢 *أرقام الرسائل المحذوفة:* %s\n\n💡 *ملاحظة:* كافة النصوص/الوسائط المحذوفة محفوظة في النسخة السابقة المرفوعة أعلى هذا الإشعار.",
+				del.Chat.ID, msgIDsStr,
+			)
+			sendMessage(botToken, adminID, delAlert)
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// 5. رصد تفعيل/تعديل ربط حساب تجاري جديد بالبوت وإشعار المطوّر
 	if update.BusinessConnection != nil {
 		bc := update.BusinessConnection
 		if bc.IsEnabled {
@@ -689,6 +834,7 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 		IsStopped:      false,
 		AutoReply:      "",
 		Excluded:       []int64{},
+		Muted:          []int64{},
 		State:          "",
 		BusinessConnID: "",
 		Lang:           "ar",
@@ -794,7 +940,8 @@ func sendMenu(token string, chatID int64, lang, text string) {
 			{{"text": tr(lang, "stop_btn"), "callback_data": "stop"}, {"text": tr(lang, "start_btn"), "callback_data": "start"}},
 			{{"text": tr(lang, "edit_text_btn"), "callback_data": "edit_text"}},
 			{{"text": tr(lang, "exclude_btn"), "callback_data": "exclude"}, {"text": tr(lang, "list_excluded_btn"), "callback_data": "list_excluded"}},
-			{{"text": tr(lang, "clear_excluded_btn"), "callback_data": "clear_excluded"}},
+			{{"text": tr(lang, "mute_btn"), "callback_data": "mute"}, {"text": tr(lang, "list_muted_btn"), "callback_data": "list_muted"}},
+			{{"text": tr(lang, "clear_excluded_btn"), "callback_data": "clear_excluded"}, {"text": tr(lang, "clear_muted_btn"), "callback_data": "clear_muted"}},
 			{{"text": tr(lang, "profile_menu_btn"), "callback_data": "profile_menu"}},
 			{{"text": tr(lang, "post_story_btn"), "callback_data": "post_story"}},
 			{{"text": tr(lang, "lang_ar_btn"), "callback_data": "lang_ar"}, {"text": tr(lang, "lang_en_btn"), "callback_data": "lang_en"}},
@@ -888,6 +1035,38 @@ func sendMessage(token string, chatID int64, text string) {
 	}
 }
 
+func copyMessage(token string, targetChatID, fromChatID int64, messageID int) {
+	payload := map[string]interface{}{
+		"chat_id":      targetChatID,
+		"from_chat_id": fromChatID,
+		"message_id":   messageID,
+	}
+	b, _ := json.Marshal(payload)
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/copyMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ copyMessage:", err)
+	}
+}
+
+func sendMuteNotice(token string, chatID, mutedUserID int64, bizID, lang string) {
+	text := tr(lang, "muted_user_notice")
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": tr(lang, "unmute_btn"), "callback_data": fmt.Sprintf("unmute_%d", mutedUserID)}},
+		},
+	}
+
+	payload := map[string]interface{}{
+		"chat_id":                chatID,
+		"text":                   text,
+		"business_connection_id": bizID,
+		"reply_markup":           keyboard,
+	}
+	b, _ := json.Marshal(payload)
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ sendMuteNotice:", err)
+	}
+}
+
 func sendBusinessReplyWithQuoteButton(token string, chatID int64, text, bizID string) {
 	initialQuote := quotes[rand.Intn(len(quotes))]
 
@@ -924,6 +1103,19 @@ func updateButtonQuote(token string, chatID int64, msgID int, newQuote string) {
 	b, _ := json.Marshal(payload)
 	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/editMessageReplyMarkup", "application/json", bytes.NewBuffer(b)); err != nil {
 		log.Println("خطأ updateButtonQuote:", err)
+	}
+}
+
+func editMessageText(token string, chatID int64, msgID int, text string) {
+	payload := map[string]interface{}{
+		"chat_id":    chatID,
+		"message_id": msgID,
+		"text":       text,
+		"parse_mode": "Markdown",
+	}
+	b, _ := json.Marshal(payload)
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/editMessageText", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ editMessageText:", err)
 	}
 }
 
@@ -1026,7 +1218,7 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 	}
 	if _, err := part.Write(fileBytes); err != nil {
 		log.Println("خطأ كتابة بيانات الملف:", err)
-		return fmt.Errorf("خطأ داخلي في كتابة الملف")
+		return fmt.Sprintf("خطأ داخلي في كتابة الملف")
 	}
 	if err := writer.Close(); err != nil {
 		log.Println("خطأ إغلاق multipart writer:", err)
@@ -1174,5 +1366,17 @@ func answerCallback(token, callbackID string) {
 	b, _ := json.Marshal(payload)
 	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b)); err != nil {
 		log.Println("خطأ answerCallback:", err)
+	}
+}
+
+func answerCallbackWithAlert(token, callbackID, text string, showAlert bool) {
+	payload := map[string]interface{}{
+		"callback_query_id": callbackID,
+		"text":              text,
+		"show_alert":        showAlert,
+	}
+	b, _ := json.Marshal(payload)
+	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b)); err != nil {
+		log.Println("خطأ answerCallbackWithAlert:", err)
 	}
 }
