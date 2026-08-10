@@ -1,4 +1,4 @@
-package handler
+package main
 
 import (
 	"bytes"
@@ -24,7 +24,6 @@ var httpClient = &http.Client{Timeout: 8 * time.Second}
 var mediaClient = &http.Client{Timeout: 30 * time.Second}
 
 // ذاكرة مؤقتة لتخزين الرسائل والوسائط الواردة/الصادرة عبر Business API
-// المفتاح: "chatID_messageID"  -->  القيمة: MediaCacheEntry
 var messageCache sync.Map
 
 // قائمة الاقتباسات
@@ -91,7 +90,7 @@ var translations = map[string]map[string]string{
 		"dur_24h":                "24 ساعة",
 		"dur_48h":                "48 ساعة",
 		"story_prompt":           "📖 أرسل الآن صورة أو فيديو (حد أقصى 60 ثانية) لنشره كقصة (ستبقى ظاهرة لمدة %s):",
-		"story_updated":          "✅ تم نشر القصة بنجاح! ستبقى ظاهرة لمدة %s.",
+		"story_updated":          "✅ تم نشر القصة بنجاح! (ظاهرة لمدة %s)\n\n✨ يمكنك إرسال صورة أو فيديو آخر فوراً لنشر قصة إضافية، أو اضغط زر الرجوع للإنهاء:",
 		"your_id_msg":            "الايدي الخاص بك هو:\n`%d`",
 		"fail_name":              "❌ فشل تعديل الاسم: %s",
 		"fail_bio":               "❌ فشل تعديل النبذة: %s",
@@ -101,7 +100,7 @@ var translations = map[string]map[string]string{
 		"need_real_photo":        "❌ أرسل صورة فعلية (لا يقبل ملفات أو نصوص).",
 		"need_real_media_story":  "❌ أرسل صورة أو فيديو فعلي لنشره كقصة.",
 		"video_too_long_error":   "الفيديو أطول من 60 ثانية، وهذا الحد الأقصى المسموح لقصص تليجرام",
-		"deleted_alert_title":    "🗑️ *تنبيه: تم حذف رسالة!*",
+		"deleted_alert_title":    "🗑️ *تنبيه: تم حذف رسالة/وسائط!*",
 		"deleted_customer_line":  "👤 العميل: %s (`%d`)",
 		"deleted_from_business":  "(محذوفة من طرف حسابك التجاري)",
 		"deleted_content_text":   "💬 المحتوى المحذوف:\n%s",
@@ -152,7 +151,7 @@ var translations = map[string]map[string]string{
 		"dur_24h":                "24 Hours",
 		"dur_48h":                "48 Hours",
 		"story_prompt":           "📖 Send a photo or video now (max 60 seconds) to post as a story (visible for %s):",
-		"story_updated":          "✅ Story posted successfully! It will remain visible for %s.",
+		"story_updated":          "✅ Story posted successfully! (visible for %s)\n\n✨ Send another photo/video now to post an additional story, or press back to exit:",
 		"your_id_msg":            "Your ID is:\n`%d`",
 		"fail_name":              "❌ Failed to update name: %s",
 		"fail_bio":               "❌ Failed to update bio: %s",
@@ -162,7 +161,7 @@ var translations = map[string]map[string]string{
 		"need_real_photo":        "❌ Please send an actual photo (files or text not accepted).",
 		"need_real_media_story":  "❌ Please send an actual photo or video to post as a story.",
 		"video_too_long_error":   "The video is longer than 60 seconds, which is Telegram's maximum allowed for stories",
-		"deleted_alert_title":    "🗑️ *Alert: A message was deleted!*",
+		"deleted_alert_title":    "🗑️ *Alert: A message/media was deleted!*",
 		"deleted_customer_line":  "👤 Customer: %s (`%d`)",
 		"deleted_from_business":  "(deleted from your business account side)",
 		"deleted_content_text":   "💬 Deleted content:\n%s",
@@ -251,8 +250,6 @@ type BotConfig struct {
 	Lang           string  `json:"lang"`
 }
 
-// --- أنواع الوسائط المدعومة في رسائل الأعمال (Business Messages) ---
-
 type PhotoSize struct {
 	FileID string `json:"file_id"`
 	Width  int    `json:"width"`
@@ -303,7 +300,6 @@ type VideoNote struct {
 	Duration int    `json:"duration"`
 }
 
-// رسالة عمل (وارد أو صادر عبر الاتصال التجاري)
 type BusinessMessage struct {
 	MessageID int `json:"message_id"`
 	Chat      struct {
@@ -329,7 +325,6 @@ type BusinessMessage struct {
 	VideoNote            *VideoNote  `json:"video_note"`
 }
 
-// إشعار حذف رسائل أعمال (يصل من تيليجرام عند حذف العميل أو الحساب التجاري لرسالة)
 type DeletedBusinessMessages struct {
 	BusinessConnectionID string `json:"business_connection_id"`
 	Chat                 struct {
@@ -389,9 +384,8 @@ type BusinessConnectionResponse struct {
 	} `json:"result"`
 }
 
-// --- بنية عنصر الذاكرة المؤقتة لتخزين رسائل ووسائط الأعمال ---
 type MediaCacheEntry struct {
-	Type         string `json:"type"` // text, photo, video, animation, sticker, voice, audio, document, video_note
+	Type         string `json:"type"`
 	FileID       string `json:"file_id,omitempty"`
 	FileName     string `json:"file_name,omitempty"`
 	Text         string `json:"text,omitempty"`
@@ -410,7 +404,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// --- فحص أمني: التحقق من Secret Token الخاص بالـ Webhook ---
 	if secret := os.Getenv("TELEGRAM_WEBHOOK_SECRET"); secret != "" {
 		if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != secret {
 			log.Println("رفض طلب: secret token غير مطابق")
@@ -544,7 +537,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. معالجة محادثة التحكم الخاصة بك
+	// 2. معالجة محادثة التحكم الخاص بالمطور
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -647,10 +640,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					sendSubMenu(botToken, chatID, lang, fmt.Sprintf(tr(lang, "fail_story"), err.Error()))
 				} else {
-					config.State = ""
-					saveConfig(botToken, chatID, config, msgID)
+					// عدم مسح الحالة يسمح بنشر عدة قصص متتالية دون الخروج من القائمة
 					durationTxt := getDurationLabel(lang, period)
-					sendMenu(botToken, chatID, lang, fmt.Sprintf(tr(lang, "story_updated"), durationTxt))
+					sendSubMenu(botToken, chatID, lang, fmt.Sprintf(tr(lang, "story_updated"), durationTxt))
 				}
 			}
 		}
@@ -663,8 +655,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 
-		// نخزّن كل رسالة/وسائط (واردة أو صادرة) قبل أي معالجة أخرى،
-		// لكي نتمكن لاحقاً من استرجاعها عند حذفها من أي طرف.
+		// نخزّن الرسالة والوسائط تلقائياً لاسترجاعها لاحقاً في حال حذفها
 		cacheBusinessMessage(msg)
 
 		if msg.IsOutgoing {
@@ -699,13 +690,12 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			customerName = "صديقي"
 		}
 
-		// --- الترجمة الفورية وتحديد اللغة للرسائل القادمة ---
+		// الترجمة الفورية
 		var detectedLang string
 		if strings.TrimSpace(msg.Text) != "" {
 			translatedToAr, dLang, err := translateText(msg.Text, "ar")
 			if err == nil && dLang != "" {
 				detectedLang = dLang
-				// إذا كانت الرسالة بلغة غير العربية، يرسل البوت إشعاراً مترجماً لك في محادثة التحكم
 				if detectedLang != "ar" && adminID != 0 {
 					notifyMsg := fmt.Sprintf(
 						"🌐 *رسالة جديدة بلغة مترجمة (`%s`)*\n👤 *العميل:* %s (`%d`)\n\n💬 *النص الأصلي:*\n%s\n\n✨ *الترجمة للعربية:*\n%s",
@@ -728,7 +718,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			replyText = "أهلاً بك يا " + customerName + " 🌸\n" + config.AutoReply
 		}
 
-		// إذا كانت لغة العميل أجنبية، يترجم البوت نص الرد التلقائي إلى لغة العميل تلقائياً قبل إرساله!
 		if detectedLang != "" && detectedLang != "ar" {
 			if translatedReply, _, err := translateText(replyText, detectedLang); err == nil && translatedReply != "" {
 				replyText = translatedReply
@@ -740,15 +729,15 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. معالجة إشعارات حذف رسائل الأعمال: استرجاع المحتوى من الذاكرة المؤقتة وإرساله لمحادثة التحكم
+	// 4. معالجة إشعارات حذف الرسائل والوسائط واعادة ارسالها للمطور
 	if update.DeletedBusinessMessages != nil {
 		dbm := update.DeletedBusinessMessages
 		adminID := getAdminIDFromBusinessConn(botToken, dbm.BusinessConnectionID)
 		if adminID != 0 {
 			config, _ := getConfig(botToken, adminID)
 			lang := config.Lang
-			for _, msgID := range dbm.MessageIDs {
-				key := cacheKey(dbm.Chat.ID, msgID)
+			for _, deletedMsgID := range dbm.MessageIDs {
+				key := cacheKey(dbm.Chat.ID, deletedMsgID)
 				if val, ok := messageCache.Load(key); ok {
 					if entry, ok2 := val.(MediaCacheEntry); ok2 {
 						notifyDeletedMessage(botToken, adminID, lang, entry)
@@ -921,7 +910,6 @@ func sendMediaByFileID(token string, chatID int64, mediaType, fileID, caption st
 		return err
 	}
 
-	// الملصقات وملاحظات الفيديو لا تدعم caption، لذا نرسل التفاصيل كرسالة منفصلة
 	if !supportsCaption && caption != "" {
 		sendMessage(token, chatID, caption)
 	}
@@ -1256,7 +1244,7 @@ func downloadTelegramFile(token, fileID string) ([]byte, error) {
 	}
 	if !res.Ok || res.Result.FilePath == "" {
 		log.Println("فشل getFile:", res.Description)
-		return nil, fmt.Errorf(res.Description)
+		return nil, fmt.Errorf("%s", res.Description)
 	}
 
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", token, res.Result.FilePath)
@@ -1322,7 +1310,7 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 	}
 	if !res.Ok {
 		log.Println("فشل", method, ":", res.Description)
-		return fmt.Errorf(res.Description)
+		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
 }
@@ -1344,7 +1332,7 @@ func callBusinessAPI(token, method string, payload map[string]interface{}) error
 	}
 	if !res.Ok {
 		log.Println("فشل", method, ":", res.Description)
-		return fmt.Errorf(res.Description)
+		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
 }
@@ -1392,7 +1380,7 @@ func setBusinessAccountProfilePhoto(token, businessConnID, fileID string) error 
 
 func postBusinessStory(token, businessConnID, mediaType, fileID string, durationSeconds int, activePeriod string, lang string) error {
 	if mediaType == "video" && durationSeconds > 60 {
-		return fmt.Errorf(tr(lang, "video_too_long_error"))
+		return fmt.Errorf("%s", tr(lang, "video_too_long_error"))
 	}
 
 	data, err := downloadTelegramFile(token, fileID)
@@ -1444,7 +1432,7 @@ func answerCallback(token, callbackID string) {
 	}
 }
 
-// --- نقطة تشغيل الخادم (مطلوبة لأن الملف package main) ---
+// --- نقطة تشغيل الخادم تشمل النمطين (Vercel Serverless و Standalone Go) ---
 func main() {
 	http.HandleFunc("/", Handler)
 
