@@ -17,16 +17,10 @@ import (
 	"time"
 )
 
-// عميل HTTP عام مع timeout قصير للطلبات النصية العادية
 var httpClient = &http.Client{Timeout: 8 * time.Second}
-
-// عميل بـ timeout أطول لعمليات تنزيل/رفع الصور والفيديوهات
 var mediaClient = &http.Client{Timeout: 30 * time.Second}
-
-// ذاكرة مؤقتة لتخزين الرسائل والوسائط الواردة/الصادرة عبر Business API
 var messageCache sync.Map
 
-// قائمة الاقتباسات
 var quotes = []string{
 	"قاوم ما تكره لتصل الى ما تحب",
 	"الحرب بين أنت ضد أنت",
@@ -44,11 +38,10 @@ var quotes = []string{
 	"لا مزيد من الأصدقاء المزيفين",
 }
 
-// --- قاموس الترجمة: عربي (افتراضي) وإنجليزي ---
 var translations = map[string]map[string]string{
 	"ar": {
 		"main_menu_title":        "القائمة الرئيسية 🤖:",
-		"welcome":                "أهلاً بك في لوحة تحكم البوت 🤖\nاختر من الأزرار أدناه للتحكم الكامل:",
+		"welcome":                "أهلاً بك في بوت صانع البوتات 🤖\nقم بإرسال توكن بوتك من @BotFather لصناعة بوتك الخاص فوراً، أو اختر من الأزرار:",
 		"stop_btn":               "🛑 إيقاف الرد",
 		"start_btn":              "🟢 تشغيل الرد",
 		"edit_text_btn":          "📝 تعديل نص الرد",
@@ -90,7 +83,7 @@ var translations = map[string]map[string]string{
 		"dur_24h":                "24 ساعة",
 		"dur_48h":                "48 ساعة",
 		"story_prompt":           "📖 أرسل الآن صورة أو فيديو (حد أقصى 60 ثانية) لنشره كقصة (ستبقى ظاهرة لمدة %s):",
-		"story_updated":          "✅ تم نشر القصة بنجاح! (ظاهرة لمدة %s)\n\n✨ يمكنك إرسال صورة أو فيديو آخر فوراً لنشر قصة إضافية، أو اضغط زر الرجوع للإنهاء:",
+		"story_updated":          "✅ تم نشر القصة بنجاح! (ظاهرة لمدة %s)\n\n✨ يمكنك إرسال صورة/فيديو آخر فوراً لنشر قصة إضافية، أو اضغط زر الرجوع للإنهاء:",
 		"your_id_msg":            "الايدي الخاص بك هو:\n`%d`",
 		"fail_name":              "❌ فشل تعديل الاسم: %s",
 		"fail_bio":               "❌ فشل تعديل النبذة: %s",
@@ -106,67 +99,6 @@ var translations = map[string]map[string]string{
 		"deleted_content_text":   "💬 المحتوى المحذوف:\n%s",
 		"deleted_content_media":  "📎 نوع الوسائط المحذوفة: %s",
 		"resend_fail_note":       "⚠️ تعذّر إعادة إرسال الملف نفسه: %s",
-	},
-	"en": {
-		"main_menu_title":        "Main Menu 🤖:",
-		"welcome":                "Welcome to the bot control panel 🤖\nChoose from the buttons below for full control:",
-		"stop_btn":               "🛑 Stop Auto-Reply",
-		"start_btn":              "🟢 Start Auto-Reply",
-		"edit_text_btn":          "📝 Edit Reply Text",
-		"exclude_btn":            "👤 Exclude Account",
-		"list_excluded_btn":      "📋 View Excluded",
-		"clear_excluded_btn":     "🧹 Clear Excluded",
-		"profile_menu_btn":       "🧑 Manage Profile",
-		"post_story_btn":         "📖 Post Story",
-		"lang_ar_btn":            "🇮🇶 العربية",
-		"lang_en_btn":            "🇺🇸 English",
-		"back_btn":               "🔙 Back",
-		"stopped_msg":            "🛑 Auto-reply has been stopped.",
-		"started_msg":            "🟢 Auto-reply has been started.",
-		"edit_text_prompt":       "📝 Send the new auto-reply text now:",
-		"saved_text_msg":         "✅ New auto-reply text saved successfully!",
-		"exclude_prompt":         "👤 Send the account ID to exclude now:",
-		"invalid_id_msg":         "❌ Numbers only! Please send a valid ID.",
-		"id_added_msg":           "✅ ID `%d` added to the exclusion list.",
-		"list_excluded_title":    "📋 **Excluded Accounts:**\n",
-		"no_excluded":            "No excluded accounts currently.",
-		"cleared_excluded_msg":   "🧹 All exclusions cleared successfully.",
-		"profile_menu_title":     "🧑 Manage Profile - choose what to edit:",
-		"edit_first_name_btn":    "✏️ Edit Name",
-		"edit_bio_btn":           "📝 Edit Bio",
-		"edit_photo_btn":         "🖼️ Edit Photo",
-		"edit_username_btn":      "🔗 Edit Username",
-		"no_business_connection": "❌ No business account connected to the bot yet.",
-		"first_name_prompt":      "✏️ Send the new first name now (optionally followed by a last name):",
-		"bio_prompt":             "📝 Send the new bio now (max 140 characters):",
-		"username_prompt":        "🔗 Send the new username now (without @):",
-		"photo_prompt":           "🖼️ Send the new profile photo now:",
-		"name_updated":           "✅ Name updated successfully!",
-		"bio_updated":            "✅ Bio updated successfully!",
-		"username_updated":       "✅ Username updated successfully!",
-		"photo_updated":          "✅ Profile photo updated successfully!",
-		"select_story_duration":  "⏱️ Select story duration:",
-		"dur_6h":                 "6 Hours",
-		"dur_12h":                "12 Hours",
-		"dur_24h":                "24 Hours",
-		"dur_48h":                "48 Hours",
-		"story_prompt":           "📖 Send a photo or video now (max 60 seconds) to post as a story (visible for %s):",
-		"story_updated":          "✅ Story posted successfully! (visible for %s)\n\n✨ Send another photo/video now to post an additional story, or press back to exit:",
-		"your_id_msg":            "Your ID is:\n`%d`",
-		"fail_name":              "❌ Failed to update name: %s",
-		"fail_bio":               "❌ Failed to update bio: %s",
-		"fail_username":          "❌ Failed to update username: %s",
-		"fail_photo":             "❌ Failed to update photo: %s",
-		"fail_story":             "❌ Failed to post story: %s",
-		"need_real_photo":        "❌ Please send an actual photo (files or text not accepted).",
-		"need_real_media_story":  "❌ Please send an actual photo or video to post as a story.",
-		"video_too_long_error":   "The video is longer than 60 seconds, which is Telegram's maximum allowed for stories",
-		"deleted_alert_title":    "🗑️ *Alert: A message/media was deleted!*",
-		"deleted_customer_line":  "👤 Customer: %s (`%d`)",
-		"deleted_from_business":  "(deleted from your business account side)",
-		"deleted_content_text":   "💬 Deleted content:\n%s",
-		"deleted_content_media":  "📎 Deleted media type: %s",
-		"resend_fail_note":       "⚠️ Could not re-send the original file: %s",
 	},
 }
 
@@ -195,7 +127,6 @@ func getDurationLabel(lang, period string) string {
 	}
 }
 
-// دالة الترجمة الفورية والكشف التلقائي عن لغة النص
 func translateText(text, targetLang string) (string, string, error) {
 	if strings.TrimSpace(text) == "" {
 		return "", "", nil
@@ -252,52 +183,39 @@ type BotConfig struct {
 
 type PhotoSize struct {
 	FileID string `json:"file_id"`
-	Width  int    `json:"width"`
-	Height int    `json:"height"`
 }
 
 type Video struct {
 	FileID   string `json:"file_id"`
-	Width    int    `json:"width"`
-	Height   int    `json:"height"`
 	Duration int    `json:"duration"`
 }
 
 type Animation struct {
 	FileID   string `json:"file_id"`
 	FileName string `json:"file_name"`
-	MimeType string `json:"mime_type"`
-	Duration int    `json:"duration"`
 }
 
 type Sticker struct {
-	FileID     string `json:"file_id"`
-	Emoji      string `json:"emoji"`
-	IsAnimated bool   `json:"is_animated"`
-	IsVideo    bool   `json:"is_video"`
+	FileID string `json:"file_id"`
+	Emoji  string `json:"emoji"`
 }
 
 type Voice struct {
-	FileID   string `json:"file_id"`
-	Duration int    `json:"duration"`
+	FileID string `json:"file_id"`
 }
 
 type Audio struct {
 	FileID   string `json:"file_id"`
-	Duration int    `json:"duration"`
 	FileName string `json:"file_name"`
-	Title    string `json:"title"`
 }
 
 type Document struct {
 	FileID   string `json:"file_id"`
 	FileName string `json:"file_name"`
-	MimeType string `json:"mime_type"`
 }
 
 type VideoNote struct {
-	FileID   string `json:"file_id"`
-	Duration int    `json:"duration"`
+	FileID string `json:"file_id"`
 }
 
 type BusinessMessage struct {
@@ -347,7 +265,6 @@ type TelegramUpdate struct {
 			Username  string `json:"username"`
 		} `json:"user"`
 		UserChatID int64 `json:"user_chat_id"`
-		Date       int64 `json:"date"`
 		IsEnabled  bool  `json:"is_enabled"`
 	} `json:"business_connection"`
 }
@@ -385,41 +302,34 @@ type BusinessConnectionResponse struct {
 }
 
 type MediaCacheEntry struct {
-	Type         string `json:"type"`
-	FileID       string `json:"file_id,omitempty"`
-	FileName     string `json:"file_name,omitempty"`
-	Text         string `json:"text,omitempty"`
-	Caption      string `json:"caption,omitempty"`
-	StickerEmoji string `json:"sticker_emoji,omitempty"`
-	FromID       int64  `json:"from_id"`
-	FromName     string `json:"from_name"`
-	ChatID       int64  `json:"chat_id"`
-	IsOutgoing   bool   `json:"is_outgoing"`
+	Type       string `json:"type"`
+	FileID     string `json:"file_id,omitempty"`
+	Text       string `json:"text,omitempty"`
+	Caption    string `json:"caption,omitempty"`
+	FromID     int64  `json:"from_id"`
+	FromName   string `json:"from_name"`
+	IsOutgoing bool   `json:"is_outgoing"`
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	// 1. تحديد التوكن ديناميكياً: هل الطلب قادم لبوت فرعي أم للبوت الرئيسي الصانع؟
+	botToken := r.URL.Query().Get("token")
+	if botToken == "" {
+		botToken = os.Getenv("TELEGRAM_BOT_TOKEN")
+	}
+
 	if botToken == "" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	if secret := os.Getenv("TELEGRAM_WEBHOOK_SECRET"); secret != "" {
-		if r.Header.Get("X-Telegram-Bot-Api-Secret-Token") != secret {
-			log.Println("رفض طلب: secret token غير مطابق")
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-	}
-
 	var update TelegramUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
-		log.Println("خطأ في قراءة التحديث:", err)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// 1. معالجة الضغط على الأزرار الشفافة
+	// 2. معالجة الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
@@ -537,7 +447,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. معالجة محادثة التحكم الخاص بالمطور
+	// 3. معالجة محادثة التحكم والنصوص الواردة
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -547,6 +457,23 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 		if msg.Text == "/start" {
 			sendMenu(botToken, chatID, lang, tr(lang, "welcome"))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// ميزة صناعة البوت تلقائياً: إذا أرسل المستخدم توكن يحتوي على ":"
+		if strings.Contains(msg.Text, ":") && len(msg.Text) > 20 {
+			newSubToken := strings.TrimSpace(msg.Text)
+			host := r.Host
+			if host == "" {
+				host = r.Header.Get("X-Forwarded-Host")
+			}
+
+			if err := setupSubBotWebhook(newSubToken, host); err != nil {
+				sendMessage(botToken, chatID, fmt.Sprintf("❌ فشل تفعيل البوت الجديد:\n`%s`\nتأكد من صحة التوكن المأخوذ من @BotFather", err.Error()))
+			} else {
+				sendMessage(botToken, chatID, fmt.Sprintf("🎉 *تم إنشاء وبناء بوتك بنجاح!*\n\n🤖 التوكن الخاص بك:\n`%s`\n\nقم بالدخول إلى بوتك الجديد واضغط /start للبدء بالتحكم التام به وربطه بـ Telegram Business!", newSubToken))
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -640,7 +567,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					sendSubMenu(botToken, chatID, lang, fmt.Sprintf(tr(lang, "fail_story"), err.Error()))
 				} else {
-					// عدم مسح الحالة يسمح بنشر عدة قصص متتالية دون الخروج من القائمة
 					durationTxt := getDurationLabel(lang, period)
 					sendSubMenu(botToken, chatID, lang, fmt.Sprintf(tr(lang, "story_updated"), durationTxt))
 				}
@@ -651,11 +577,9 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. معالجة رسائل العملاء (Business Messages) وتخزينها في الذاكرة المؤقتة
+	// 4. معالجة رسائل العملاء (Business Messages)
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
-
-		// نخزّن الرسالة والوسائط تلقائياً لاسترجاعها لاحقاً في حال حذفها
 		cacheBusinessMessage(msg)
 
 		if msg.IsOutgoing {
@@ -690,7 +614,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			customerName = "صديقي"
 		}
 
-		// الترجمة الفورية
 		var detectedLang string
 		if strings.TrimSpace(msg.Text) != "" {
 			translatedToAr, dLang, err := translateText(msg.Text, "ar")
@@ -729,7 +652,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. معالجة إشعارات حذف الرسائل والوسائط واعادة ارسالها للمطور
+	// 5. معالجة إشعارات حذف الرسائل والوسائط
 	if update.DeletedBusinessMessages != nil {
 		dbm := update.DeletedBusinessMessages
 		adminID := getAdminIDFromBusinessConn(botToken, dbm.BusinessConnectionID)
@@ -750,7 +673,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. رصد تفعيل/تعديل ربط حساب تجاري جديد بالبوت وإشعار المطوّر
+	// 6. رصد تفعيل ربط حساب تجاري
 	if update.BusinessConnection != nil {
 		bc := update.BusinessConnection
 		if bc.IsEnabled {
@@ -769,7 +692,31 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// --- منطق الذاكرة المؤقتة للرسائل والوسائط ---
+// --- دالة ربط البوت الفرعي الجديد بقاعدة فيرسل بدون تخزين ---
+func setupSubBotWebhook(subBotToken, host string) error {
+	if host == "" {
+		return fmt.Errorf("تعذر تحديد رابط الخادم الفعلي")
+	}
+
+	webhookURL := fmt.Sprintf("https://%s/?token=%s", host, subBotToken)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook?url=%s", subBotToken, url.QueryEscape(webhookURL))
+
+	resp, err := httpClient.Get(apiURL)
+	if err != nil {
+		return fmt.Errorf("خطأ اتصل بتليجرام: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var res apiResult
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return fmt.Errorf("فشل فك تشفير استجابة تليجرام")
+	}
+
+	if !res.Ok {
+		return fmt.Errorf("%s", res.Description)
+	}
+	return nil
+}
 
 func cacheKey(chatID int64, messageID int) string {
 	return fmt.Sprintf("%d_%d", chatID, messageID)
@@ -794,7 +741,6 @@ func cacheBusinessMessage(msg *BusinessMessage) {
 	entry := MediaCacheEntry{
 		FromID:     msg.From.ID,
 		FromName:   buildDisplayName(msg.From.FirstName, msg.From.LastName, msg.From.Username),
-		ChatID:     msg.Chat.ID,
 		IsOutgoing: msg.IsOutgoing,
 	}
 
@@ -810,24 +756,20 @@ func cacheBusinessMessage(msg *BusinessMessage) {
 	case msg.Animation != nil:
 		entry.Type = "animation"
 		entry.FileID = msg.Animation.FileID
-		entry.FileName = msg.Animation.FileName
 		entry.Caption = msg.Caption
 	case msg.Sticker != nil:
 		entry.Type = "sticker"
 		entry.FileID = msg.Sticker.FileID
-		entry.StickerEmoji = msg.Sticker.Emoji
 	case msg.Voice != nil:
 		entry.Type = "voice"
 		entry.FileID = msg.Voice.FileID
 	case msg.Audio != nil:
 		entry.Type = "audio"
 		entry.FileID = msg.Audio.FileID
-		entry.FileName = msg.Audio.FileName
 		entry.Caption = msg.Caption
 	case msg.Document != nil:
 		entry.Type = "document"
 		entry.FileID = msg.Document.FileID
-		entry.FileName = msg.Document.FileName
 		entry.Caption = msg.Caption
 	case msg.VideoNote != nil:
 		entry.Type = "video_note"
@@ -861,14 +803,13 @@ func notifyDeletedMessage(token string, adminID int64, lang string, entry MediaC
 	}
 
 	if err := sendMediaByFileID(token, adminID, entry.Type, entry.FileID, caption); err != nil {
-		log.Println("خطأ إعادة إرسال الوسائط المحذوفة:", err)
 		sendMessage(token, adminID, caption+"\n\n"+fmt.Sprintf(tr(lang, "resend_fail_note"), err.Error()))
 	}
 }
 
 func sendMediaByFileID(token string, chatID int64, mediaType, fileID, caption string) error {
 	if fileID == "" {
-		return fmt.Errorf("لا يوجد file_id محفوظ لهذه الوسائط")
+		return fmt.Errorf("لا يوجد file_id محفوظ")
 	}
 
 	var method, fileField string
@@ -894,7 +835,7 @@ func sendMediaByFileID(token string, chatID int64, mediaType, fileID, caption st
 		method, fileField = "sendVideoNote", "video_note"
 		supportsCaption = false
 	default:
-		return fmt.Errorf("نوع وسائط غير مدعوم: %s", mediaType)
+		return fmt.Errorf("نوع غير مدعوم")
 	}
 
 	payload := map[string]interface{}{
@@ -923,14 +864,12 @@ func getAdminIDFromBusinessConn(token string, connID string) int64 {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getBusinessConnection?business_connection_id=%s", token, connID)
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		log.Println("خطأ getBusinessConnection:", err)
 		return 0
 	}
 	defer resp.Body.Close()
 
 	var res BusinessConnectionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		log.Println("خطأ فك تشفير getBusinessConnection:", err)
 		return 0
 	}
 	if res.Result.UserChatID != 0 {
@@ -940,15 +879,7 @@ func getAdminIDFromBusinessConn(token string, connID string) int64 {
 }
 
 func getConfig(token string, chatID int64) (BotConfig, int) {
-	defaultCfg := BotConfig{
-		IsStopped:      false,
-		AutoReply:      "",
-		Excluded:       []int64{},
-		State:          "",
-		BusinessConnID: "",
-		Lang:           "ar",
-	}
-
+	defaultCfg := BotConfig{IsStopped: false, AutoReply: "", Excluded: []int64{}, Lang: "ar"}
 	if chatID == 0 {
 		return defaultCfg, 0
 	}
@@ -956,7 +887,6 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getChat?chat_id=%d", token, chatID)
 	resp, err := httpClient.Get(url)
 	if err != nil {
-		log.Println("خطأ getChat:", err)
 		return defaultCfg, 0
 	}
 	defer resp.Body.Close()
@@ -971,7 +901,6 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		log.Println("خطأ فك تشفير getChat:", err)
 		return defaultCfg, 0
 	}
 
@@ -997,25 +926,15 @@ func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
 
 	if pinnedMsgID > 0 {
 		url := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageText", token)
-		payload := map[string]interface{}{
-			"chat_id":    chatID,
-			"message_id": pinnedMsgID,
-			"text":       cfgText,
-		}
+		payload := map[string]interface{}{"chat_id": chatID, "message_id": pinnedMsgID, "text": cfgText}
 		pBytes, _ := json.Marshal(payload)
-		if _, err := httpClient.Post(url, "application/json", bytes.NewBuffer(pBytes)); err != nil {
-			log.Println("خطأ editMessageText:", err)
-		}
+		httpClient.Post(url, "application/json", bytes.NewBuffer(pBytes))
 	} else {
 		url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
-		payload := map[string]interface{}{
-			"chat_id": chatID,
-			"text":    cfgText,
-		}
+		payload := map[string]interface{}{"chat_id": chatID, "text": cfgText}
 		pBytes, _ := json.Marshal(payload)
 		resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(pBytes))
 		if err != nil {
-			log.Println("خطأ sendMessage (saveConfig):", err)
 			return
 		}
 		defer resp.Body.Close()
@@ -1024,21 +943,11 @@ func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
 				MessageID int `json:"message_id"`
 			} `json:"result"`
 		}
-		if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-			log.Println("خطأ فك تشفير sendMessage:", err)
-			return
-		}
-		if res.Result.MessageID != 0 {
+		if err := json.NewDecoder(resp.Body).Decode(&res); err == nil && res.Result.MessageID != 0 {
 			pinUrl := fmt.Sprintf("https://api.telegram.org/bot%s/pinChatMessage", token)
-			pinPayload := map[string]interface{}{
-				"chat_id":              chatID,
-				"message_id":           res.Result.MessageID,
-				"disable_notification": true,
-			}
+			pinPayload := map[string]interface{}{"chat_id": chatID, "message_id": res.Result.MessageID, "disable_notification": true}
 			pPinBytes, _ := json.Marshal(pinPayload)
-			if _, err := httpClient.Post(pinUrl, "application/json", bytes.NewBuffer(pPinBytes)); err != nil {
-				log.Println("خطأ pinChatMessage:", err)
-			}
+			httpClient.Post(pinUrl, "application/json", bytes.NewBuffer(pPinBytes))
 		}
 	}
 }
@@ -1055,17 +964,9 @@ func sendMenu(token string, chatID int64, lang, text string) {
 			{{"text": tr(lang, "lang_ar_btn"), "callback_data": "lang_ar"}, {"text": tr(lang, "lang_en_btn"), "callback_data": "lang_en"}},
 		},
 	}
-
-	payload := map[string]interface{}{
-		"chat_id":      chatID,
-		"text":         text,
-		"parse_mode":   "Markdown",
-		"reply_markup": keyboard,
-	}
+	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown", "reply_markup": keyboard}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ sendMenu:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
 func sendStoryDurationMenu(token string, chatID int64, lang string) {
@@ -1076,17 +977,9 @@ func sendStoryDurationMenu(token string, chatID int64, lang string) {
 			{{"text": tr(lang, "back_btn"), "callback_data": "main_menu"}},
 		},
 	}
-
-	payload := map[string]interface{}{
-		"chat_id":      chatID,
-		"text":         tr(lang, "select_story_duration"),
-		"parse_mode":   "Markdown",
-		"reply_markup": keyboard,
-	}
+	payload := map[string]interface{}{"chat_id": chatID, "text": tr(lang, "select_story_duration"), "parse_mode": "Markdown", "reply_markup": keyboard}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ sendStoryDurationMenu:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
 func sendProfileMenu(token string, chatID int64, lang, text string) {
@@ -1099,98 +992,52 @@ func sendProfileMenu(token string, chatID int64, lang, text string) {
 			{{"text": tr(lang, "back_btn"), "callback_data": "main_menu"}},
 		},
 	}
-
-	payload := map[string]interface{}{
-		"chat_id":      chatID,
-		"text":         text,
-		"parse_mode":   "Markdown",
-		"reply_markup": keyboard,
-	}
+	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown", "reply_markup": keyboard}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ sendProfileMenu:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
 func sendSubMenu(token string, chatID int64, lang, text string) {
 	keyboard := map[string]interface{}{
-		"inline_keyboard": [][]map[string]string{
-			{{"text": tr(lang, "back_btn"), "callback_data": "main_menu"}},
-		},
+		"inline_keyboard": [][]map[string]string{{{"text": tr(lang, "back_btn"), "callback_data": "main_menu"}}},
 	}
-
-	payload := map[string]interface{}{
-		"chat_id":      chatID,
-		"text":         text,
-		"parse_mode":   "Markdown",
-		"reply_markup": keyboard,
-	}
+	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown", "reply_markup": keyboard}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ sendSubMenu:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
 func sendMessage(token string, chatID int64, text string) {
-	payload := map[string]interface{}{
-		"chat_id":    chatID,
-		"text":       text,
-		"parse_mode": "Markdown",
-	}
+	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown"}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ sendMessage:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
 func sendBusinessReplyWithQuoteButton(token string, chatID int64, text, bizID string) {
 	initialQuote := quotes[rand.Intn(len(quotes))]
-
 	keyboard := map[string]interface{}{
-		"inline_keyboard": [][]map[string]string{
-			{{"text": "✨ " + initialQuote, "callback_data": "change_quote"}},
-		},
+		"inline_keyboard": [][]map[string]string{{{"text": "✨ " + initialQuote, "callback_data": "change_quote"}}},
 	}
-
-	payload := map[string]interface{}{
-		"chat_id":                chatID,
-		"text":                   text,
-		"business_connection_id": bizID,
-		"reply_markup":           keyboard,
-	}
+	payload := map[string]interface{}{"chat_id": chatID, "text": text, "business_connection_id": bizID, "reply_markup": keyboard}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ sendBusinessReplyWithQuoteButton:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
 func updateButtonQuote(token string, chatID int64, msgID int, newQuote string) {
 	keyboard := map[string]interface{}{
-		"inline_keyboard": [][]map[string]string{
-			{{"text": "✨ " + newQuote, "callback_data": "change_quote"}},
-		},
+		"inline_keyboard": [][]map[string]string{{{"text": "✨ " + newQuote, "callback_data": "change_quote"}}},
 	}
-
-	payload := map[string]interface{}{
-		"chat_id":      chatID,
-		"message_id":   msgID,
-		"reply_markup": keyboard,
-	}
+	payload := map[string]interface{}{"chat_id": chatID, "message_id": msgID, "reply_markup": keyboard}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/editMessageReplyMarkup", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ updateButtonQuote:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/editMessageReplyMarkup", "application/json", bytes.NewBuffer(b))
 }
 
 func notifyDeveloper(token string, userID int64, firstName, lastName, username string) {
 	devChatID := os.Getenv("DEVELOPER_CHAT_ID")
 	if devChatID == "" {
-		log.Println("تحذير: DEVELOPER_CHAT_ID غير مضبوط، لن يتم إرسال إشعار التفعيل")
 		return
 	}
 	devID, err := strconv.ParseInt(devChatID, 10, 64)
 	if err != nil {
-		log.Println("خطأ: DEVELOPER_CHAT_ID غير صالح:", err)
 		return
 	}
 
@@ -1201,21 +1048,14 @@ func notifyDeveloper(token string, userID int64, firstName, lastName, username s
 	if fullName == "" {
 		fullName = "غير معروف"
 	}
-
 	usernameLine := "لا يوجد يوزر"
 	if username != "" {
 		usernameLine = "@" + username
 	}
 
-	text := fmt.Sprintf(
-		"🔔 *تفعيل جديد للبوت*\n\n👤 الاسم: %s\n🆔 الايدي: `%d`\n🔗 اليوزر: %s",
-		fullName, userID, usernameLine,
-	)
-
+	text := fmt.Sprintf("🔔 *تفعيل جديد للبوت*\n\n👤 الاسم: %s\n🆔 الايدي: `%d`\n🔗 اليوزر: %s", fullName, userID, usernameLine)
 	sendMessage(token, devID, text)
 }
-
-// --- دوال إدارة الملف الشخصي والقصص عبر Telegram Business API ---
 
 type apiResult struct {
 	Ok          bool   `json:"ok"`
@@ -1226,7 +1066,6 @@ func downloadTelegramFile(token, fileID string) ([]byte, error) {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s", token, fileID)
 	resp, err := mediaClient.Get(url)
 	if err != nil {
-		log.Println("خطأ getFile:", err)
 		return nil, fmt.Errorf("تعذر الاتصال بتليجرام لجلب الملف")
 	}
 	defer resp.Body.Close()
@@ -1238,29 +1077,19 @@ func downloadTelegramFile(token, fileID string) ([]byte, error) {
 		} `json:"result"`
 		Description string `json:"description"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		log.Println("خطأ فك تشفير getFile:", err)
-		return nil, fmt.Errorf("رد غير متوقع عند جلب الملف")
-	}
+	json.NewDecoder(resp.Body).Decode(&res)
 	if !res.Ok || res.Result.FilePath == "" {
-		log.Println("فشل getFile:", res.Description)
 		return nil, fmt.Errorf("%s", res.Description)
 	}
 
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", token, res.Result.FilePath)
 	fResp, err := mediaClient.Get(fileURL)
 	if err != nil {
-		log.Println("خطأ تنزيل الملف:", err)
 		return nil, fmt.Errorf("تعذر تنزيل الملف من تليجرام")
 	}
 	defer fResp.Body.Close()
 
-	data, err := io.ReadAll(fResp.Body)
-	if err != nil {
-		log.Println("خطأ قراءة بيانات الملف:", err)
-		return nil, fmt.Errorf("تعذر قراءة بيانات الملف")
-	}
-	return data, nil
+	return io.ReadAll(fResp.Body)
 }
 
 func postMultipartBusinessAPI(token, method string, fields map[string]string, fileFieldName, fileName string, fileBytes []byte) error {
@@ -1268,48 +1097,29 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 	writer := multipart.NewWriter(body)
 
 	for k, v := range fields {
-		if err := writer.WriteField(k, v); err != nil {
-			log.Println("خطأ تجهيز حقل multipart:", err)
-			return fmt.Errorf("خطأ داخلي في تجهيز الطلب")
-		}
+		writer.WriteField(k, v)
 	}
 
 	part, err := writer.CreateFormFile(fileFieldName, fileName)
 	if err != nil {
-		log.Println("خطأ إنشاء ملف multipart:", err)
-		return fmt.Errorf("خطأ داخلي في تجهيز الملف")
+		return err
 	}
-	if _, err := part.Write(fileBytes); err != nil {
-		log.Println("خطأ كتابة بيانات الملف:", err)
-		return fmt.Errorf("خطأ داخلي في كتابة الملف")
-	}
-	if err := writer.Close(); err != nil {
-		log.Println("خطأ إغلاق multipart writer:", err)
-		return fmt.Errorf("خطأ داخلي في إغلاق الطلب")
-	}
+	part.Write(fileBytes)
+	writer.Close()
 
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
-	req, err := http.NewRequest("POST", url, body)
-	if err != nil {
-		log.Println("خطأ تجهيز الطلب:", err)
-		return fmt.Errorf("تعذر تجهيز طلب الرفع")
-	}
+	req, _ := http.NewRequest("POST", url, body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := mediaClient.Do(req)
 	if err != nil {
-		log.Println("خطأ استدعاء", method, "(multipart):", err)
-		return fmt.Errorf("تعذر الاتصال بتليجرام")
+		return err
 	}
 	defer resp.Body.Close()
 
 	var res apiResult
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		log.Println("خطأ فك تشفير رد", method, ":", err)
-		return fmt.Errorf("رد غير متوقع من تليجرام")
-	}
+	json.NewDecoder(resp.Body).Decode(&res)
 	if !res.Ok {
-		log.Println("فشل", method, ":", res.Description)
 		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
@@ -1320,28 +1130,20 @@ func callBusinessAPI(token, method string, payload map[string]interface{}) error
 	b, _ := json.Marshal(payload)
 	resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(b))
 	if err != nil {
-		log.Println("خطأ استدعاء", method, ":", err)
-		return fmt.Errorf("تعذر الاتصال بتليجرام")
+		return err
 	}
 	defer resp.Body.Close()
 
 	var res apiResult
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		log.Println("خطأ فك تشفير رد", method, ":", err)
-		return fmt.Errorf("رد غير متوقع من تليجرام")
-	}
+	json.NewDecoder(resp.Body).Decode(&res)
 	if !res.Ok {
-		log.Println("فشل", method, ":", res.Description)
 		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
 }
 
 func setBusinessAccountName(token, businessConnID, firstName, lastName string) error {
-	payload := map[string]interface{}{
-		"business_connection_id": businessConnID,
-		"first_name":             firstName,
-	}
+	payload := map[string]interface{}{"business_connection_id": businessConnID, "first_name": firstName}
 	if lastName != "" {
 		payload["last_name"] = lastName
 	}
@@ -1349,19 +1151,11 @@ func setBusinessAccountName(token, businessConnID, firstName, lastName string) e
 }
 
 func setBusinessAccountBio(token, businessConnID, bio string) error {
-	payload := map[string]interface{}{
-		"business_connection_id": businessConnID,
-		"bio":                    bio,
-	}
-	return callBusinessAPI(token, "setBusinessAccountBio", payload)
+	return callBusinessAPI(token, "setBusinessAccountBio", map[string]interface{}{"business_connection_id": businessConnID, "bio": bio})
 }
 
 func setBusinessAccountUsername(token, businessConnID, username string) error {
-	payload := map[string]interface{}{
-		"business_connection_id": businessConnID,
-		"username":               username,
-	}
-	return callBusinessAPI(token, "setBusinessAccountUsername", payload)
+	return callBusinessAPI(token, "setBusinessAccountUsername", map[string]interface{}{"business_connection_id": businessConnID, "username": username})
 }
 
 func setBusinessAccountProfilePhoto(token, businessConnID, fileID string) error {
@@ -1369,20 +1163,13 @@ func setBusinessAccountProfilePhoto(token, businessConnID, fileID string) error 
 	if err != nil {
 		return err
 	}
-
-	photoJSON := `{"type":"static","photo":"attach://photo"}`
-	fields := map[string]string{
-		"business_connection_id": businessConnID,
-		"photo":                  photoJSON,
-	}
-	return postMultipartBusinessAPI(token, "setBusinessAccountProfilePhoto", fields, "photo", "photo.jpg", data)
+	return postMultipartBusinessAPI(token, "setBusinessAccountProfilePhoto", map[string]string{"business_connection_id": businessConnID, "photo": `{"type":"static","photo":"attach://photo"}`}, "photo", "photo.jpg", data)
 }
 
 func postBusinessStory(token, businessConnID, mediaType, fileID string, durationSeconds int, activePeriod string, lang string) error {
 	if mediaType == "video" && durationSeconds > 60 {
 		return fmt.Errorf("%s", tr(lang, "video_too_long_error"))
 	}
-
 	data, err := downloadTelegramFile(token, fileID)
 	if err != nil {
 		return err
@@ -1405,44 +1192,26 @@ func postBusinessStory(token, businessConnID, mediaType, fileID string, duration
 		activePeriod = "86400"
 	}
 
-	fields := map[string]string{
-		"business_connection_id": businessConnID,
-		"content":                contentJSON,
-		"active_period":          activePeriod,
-	}
-	return postMultipartBusinessAPI(token, "postStory", fields, "content", fileName, data)
+	return postMultipartBusinessAPI(token, "postStory", map[string]string{"business_connection_id": businessConnID, "content": contentJSON, "active_period": activePeriod}, "content", fileName, data)
 }
 
 func deleteMessage(token string, chatID int64, msgID int) {
-	payload := map[string]interface{}{
-		"chat_id":    chatID,
-		"message_id": msgID,
-	}
+	payload := map[string]interface{}{"chat_id": chatID, "message_id": msgID}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/deleteMessage", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ deleteMessage:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/deleteMessage", "application/json", bytes.NewBuffer(b))
 }
 
 func answerCallback(token, callbackID string) {
 	payload := map[string]string{"callback_query_id": callbackID}
 	b, _ := json.Marshal(payload)
-	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b)); err != nil {
-		log.Println("خطأ answerCallback:", err)
-	}
+	httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b))
 }
 
-// --- نقطة تشغيل الخادم تشمل النمطين (Vercel Serverless و Standalone Go) ---
 func main() {
 	http.HandleFunc("/", Handler)
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-
-	log.Println("🚀 البوت يعمل الآن على المنفذ " + port)
-	if err := http.ListenAndServe(":"+port, nil); err != nil {
-		log.Fatal("فشل تشغيل الخادم: ", err)
-	}
+	http.ListenAndServe(":"+port, nil)
 }
