@@ -403,7 +403,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	var update TelegramUpdate
 	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
-		log.Println("خطأ في قراءة التحديث:", err)
+		log.Println("خطأ قراءة التحديث:", err)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
@@ -1059,6 +1059,7 @@ func sendMediaByFileID(token string, chatID int64, mediaType, fileID, caption st
 	}
 
 	if err := callBusinessAPI(token, method, payload); err != nil {
+		log.Println("خطأ إرسال وسائط عبر API:", err)
 		return err
 	}
 
@@ -1075,12 +1076,14 @@ func getAdminIDFromBusinessConn(token string, connID string) int64 {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getBusinessConnection?business_connection_id=%s", token, connID)
 	resp, err := httpClient.Get(url)
 	if err != nil {
+		log.Println("خطأ getBusinessConnection:", err)
 		return 0
 	}
 	defer resp.Body.Close()
 
 	var res BusinessConnectionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		log.Println("خطأ فك تشفير getBusinessConnection:", err)
 		return 0
 	}
 	if res.Result.UserChatID != 0 {
@@ -1098,6 +1101,7 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getChat?chat_id=%d", token, chatID)
 	resp, err := httpClient.Get(url)
 	if err != nil {
+		log.Println("خطأ getChat:", err)
 		return defaultCfg, 0
 	}
 	defer resp.Body.Close()
@@ -1112,6 +1116,7 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		log.Println("خطأ فك تشفير getChat:", err)
 		return defaultCfg, 0
 	}
 
@@ -1146,6 +1151,7 @@ func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
 		pBytes, _ := json.Marshal(payload)
 		resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(pBytes))
 		if err != nil {
+			log.Println("خطأ حفظ الإعدادات:", err)
 			return
 		}
 		defer resp.Body.Close()
@@ -1232,6 +1238,7 @@ func notifyDeveloper(token string, userID int64, firstName, lastName, username s
 	}
 	devID, err := strconv.ParseInt(devChatID, 10, 64)
 	if err != nil {
+		log.Println("خطأ DEVELOPER_CHAT_ID:", err)
 		return
 	}
 
@@ -1260,6 +1267,7 @@ func downloadTelegramFile(token, fileID string) ([]byte, error) {
 	url := fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s", token, fileID)
 	resp, err := mediaClient.Get(url)
 	if err != nil {
+		log.Println("خطأ getFile:", err)
 		return nil, fmt.Errorf("تعذر الاتصال بتليجرام لجلب الملف")
 	}
 	defer resp.Body.Close()
@@ -1271,7 +1279,10 @@ func downloadTelegramFile(token, fileID string) ([]byte, error) {
 		} `json:"result"`
 		Description string `json:"description"`
 	}
-	json.NewDecoder(resp.Body).Decode(&res)
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		log.Println("خطأ فك تشفير getFile:", err)
+		return nil, fmt.Errorf("رد غير متوقع من تليجرام")
+	}
 	if !res.Ok || res.Result.FilePath == "" {
 		return nil, fmt.Errorf("%s", res.Description)
 	}
@@ -1279,6 +1290,7 @@ func downloadTelegramFile(token, fileID string) ([]byte, error) {
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", token, res.Result.FilePath)
 	fResp, err := mediaClient.Get(fileURL)
 	if err != nil {
+		log.Println("خطأ تنزيل الملف:", err)
 		return nil, fmt.Errorf("تعذر تنزيل الملف من تليجرام")
 	}
 	defer fResp.Body.Close()
@@ -1307,14 +1319,17 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 
 	resp, err := mediaClient.Do(req)
 	if err != nil {
+		log.Println("خطأ multipart POST:", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	var res apiResult
-	json.NewDecoder(resp.Body).Decode(&res)
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return err
+	}
 	if !res.Ok {
-		return fmt.Sprintf("%s", res.Description)
+		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
 }
@@ -1324,12 +1339,15 @@ func callBusinessAPI(token, method string, payload map[string]interface{}) error
 	b, _ := json.Marshal(payload)
 	resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(b))
 	if err != nil {
+		log.Println("خطأ callBusinessAPI:", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	var res apiResult
-	json.NewDecoder(resp.Body).Decode(&res)
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return err
+	}
 	if !res.Ok {
 		return fmt.Sprintf("%s", res.Description)
 	}
