@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"bytes"
@@ -381,14 +381,12 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			targetIDStr := strings.TrimPrefix(cb.Data, "unmute_")
 			targetID, _ := strconv.ParseInt(targetIDStr, 10, 64)
 
-			// إذا كان الضغاط هو الشخص المكتوم نفسه، يتم رفض طلب الكتم عبر تنبيه pop-up
 			if cb.From.ID == targetID {
 				answerCallbackWithAlert(botToken, cb.ID, tr("ar", "unmute_not_owner"), true)
 				w.WriteHeader(http.StatusOK)
 				return
 			}
 
-			// صاحب الحساب هو من ضغط على الزر -> إلغاء الكتم
 			answerCallback(botToken, cb.ID)
 			config, msgID := getConfig(botToken, cb.From.ID)
 
@@ -701,7 +699,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if isMuted {
-			// إرسال رد الكتم مع زر إلغاء الكتم الشفاف
 			sendMuteNotice(botToken, customerChatID, senderID, msg.BusinessConnectionID, config.Lang)
 			w.WriteHeader(http.StatusOK)
 			return
@@ -1379,9 +1376,4 @@ func answerCallbackWithAlert(token, callbackID, text string, showAlert bool) {
 	if _, err := httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b)); err != nil {
 		log.Println("خطأ answerCallbackWithAlert:", err)
 	}
-}
-
-func main() {
-	http.HandleFunc("/", Handler)
-	http.ListenAndServe(":8080", nil)
 }
