@@ -1181,7 +1181,7 @@ func downloadTelegramFile(token, fileID string) ([]byte, error) {
 	}
 	if !res.Ok || res.Result.FilePath == "" {
 		log.Println("فشل getFile:", res.Description)
-		return nil, fmt.Errorf(res.Description)
+		return nil, fmt.Errorf("%s", res.Description)
 	}
 
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", token, res.Result.FilePath)
@@ -1218,7 +1218,7 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 	}
 	if _, err := part.Write(fileBytes); err != nil {
 		log.Println("خطأ كتابة بيانات الملف:", err)
-		return fmt.Sprintf("خطأ داخلي في كتابة الملف")
+		return fmt.Errorf("خطأ داخلي في كتابة الملف")
 	}
 	if err := writer.Close(); err != nil {
 		log.Println("خطأ إغلاق multipart writer:", err)
@@ -1247,7 +1247,7 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 	}
 	if !res.Ok {
 		log.Println("فشل", method, ":", res.Description)
-		return fmt.Errorf(res.Description)
+		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
 }
@@ -1269,7 +1269,7 @@ func callBusinessAPI(token, method string, payload map[string]interface{}) error
 	}
 	if !res.Ok {
 		log.Println("فشل", method, ":", res.Description)
-		return fmt.Errorf(res.Description)
+		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
 }
@@ -1317,7 +1317,7 @@ func setBusinessAccountProfilePhoto(token, businessConnID, fileID string) error 
 
 func postBusinessStory(token, businessConnID, mediaType, fileID string, durationSeconds int, activePeriod string, lang string) error {
 	if mediaType == "video" && durationSeconds > 60 {
-		return fmt.Errorf(tr(lang, "video_too_long_error"))
+		return fmt.Errorf("%s", tr(lang, "video_too_long_error"))
 	}
 
 	data, err := downloadTelegramFile(token, fileID)
