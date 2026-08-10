@@ -1380,6 +1380,7 @@ func answerCallbackWithAlert(token, callbackID, text string, showAlert bool) {
 		log.Println("خطأ answerCallbackWithAlert:", err)
 	}
 }
+
 func main() {
 	http.HandleFunc("/", Handler)
 	http.ListenAndServe(":8080", nil)
