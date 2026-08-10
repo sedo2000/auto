@@ -41,7 +41,10 @@ var quotes = []string{
 var translations = map[string]map[string]string{
 	"ar": {
 		"main_menu_title":        "القائمة الرئيسية 🤖:",
-		"welcome":                "أهلاً بك في بوت صانع البوتات 🤖\nقم بإرسال توكن بوتك من @BotFather لصناعة بوتك الخاص فوراً، أو اختر من الأزرار:",
+		"welcome_maker":          "أهلاً بك في بوت صانع البوتات 🤖\n\nقم بالضغط على الزر أدناه لصناعة بوتك الخاص بك فوراً وبشكل مجاني:",
+		"welcome":                "أهلاً بك في لوحة تحكم البوت 🤖\nاختر من الأزرار أدناه للتحكم الكامل:",
+		"create_bot_btn":         "🤖 اصنع بوت مشابه خاص بك",
+		"delete_bot_btn":         "🗑️ حذف / إيقاف بوت",
 		"stop_btn":               "🛑 إيقاف الرد",
 		"start_btn":              "🟢 تشغيل الرد",
 		"edit_text_btn":          "📝 تعديل نص الرد",
@@ -312,15 +315,14 @@ type MediaCacheEntry struct {
 }
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	// 1. تحديد التوكن ديناميكياً: هل الطلب قادم لبوت فرعي أم للبوت الرئيسي الصانع؟
-	botToken := r.URL.Query().Get("token")
-	if botToken == "" {
-		botToken = os.Getenv("TELEGRAM_BOT_TOKEN")
-	}
+	mainToken := os.Getenv("TELEGRAM_BOT_TOKEN")
+	tokenQuery := r.URL.Query().Get("token")
 
-	if botToken == "" {
-		w.WriteHeader(http.StatusOK)
-		return
+	isMainMakerBot := false
+	botToken := tokenQuery
+	if botToken == "" || botToken == mainToken {
+		botToken = mainToken
+		isMainMakerBot = true
 	}
 
 	var update TelegramUpdate
@@ -329,7 +331,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. معالجة الأزرار الشفافة
+	// 1. معالجة الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
@@ -347,10 +349,22 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		lang := config.Lang
 
 		switch cb.Data {
+		case "create_bot_prompt":
+			config.State = "waiting_create_token"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, lang, "🤖 **أرسل الآن توكن بوتك الجديد المأخوذ من @BotFather:**")
+		case "delete_bot_prompt":
+			config.State = "waiting_delete_token"
+			saveConfig(botToken, adminID, config, msgID)
+			sendSubMenu(botToken, adminID, lang, "🗑️ **أرسل الآن توكن البوت الذي تريد حذفه وإيقافه:**")
 		case "main_menu":
 			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
-			sendMenu(botToken, adminID, lang, tr(lang, "main_menu_title"))
+			if isMainMakerBot {
+				sendMakerMenu(botToken, adminID, lang, tr(lang, "welcome_maker"))
+			} else {
+				sendMenu(botToken, adminID, lang, tr(lang, "main_menu_title"))
+			}
 		case "stop":
 			config.IsStopped = true
 			config.State = ""
@@ -435,19 +449,27 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			config.Lang = "ar"
 			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
-			sendMenu(botToken, adminID, "ar", tr("ar", "main_menu_title"))
+			if isMainMakerBot {
+				sendMakerMenu(botToken, adminID, "ar", tr("ar", "welcome_maker"))
+			} else {
+				sendMenu(botToken, adminID, "ar", tr("ar", "main_menu_title"))
+			}
 		case "lang_en":
 			config.Lang = "en"
 			config.State = ""
 			saveConfig(botToken, adminID, config, msgID)
-			sendMenu(botToken, adminID, "en", tr("en", "main_menu_title"))
+			if isMainMakerBot {
+				sendMakerMenu(botToken, adminID, "en", tr("en", "welcome_maker"))
+			} else {
+				sendMenu(botToken, adminID, "en", tr("en", "main_menu_title"))
+			}
 		}
 
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	// 3. معالجة محادثة التحكم والنصوص الواردة
+	// 2. معالجة الرسائل القادمة
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -456,23 +478,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		lang := config.Lang
 
 		if msg.Text == "/start" {
-			sendMenu(botToken, chatID, lang, tr(lang, "welcome"))
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		// ميزة صناعة البوت تلقائياً: إذا أرسل المستخدم توكن يحتوي على ":"
-		if strings.Contains(msg.Text, ":") && len(msg.Text) > 20 {
-			newSubToken := strings.TrimSpace(msg.Text)
-			host := r.Host
-			if host == "" {
-				host = r.Header.Get("X-Forwarded-Host")
-			}
-
-			if err := setupSubBotWebhook(newSubToken, host); err != nil {
-				sendMessage(botToken, chatID, fmt.Sprintf("❌ فشل تفعيل البوت الجديد:\n`%s`\nتأكد من صحة التوكن المأخوذ من @BotFather", err.Error()))
+			if isMainMakerBot {
+				sendMakerMenu(botToken, chatID, lang, tr(lang, "welcome_maker"))
 			} else {
-				sendMessage(botToken, chatID, fmt.Sprintf("🎉 *تم إنشاء وبناء بوتك بنجاح!*\n\n🤖 التوكن الخاص بك:\n`%s`\n\nقم بالدخول إلى بوتك الجديد واضغط /start للبدء بالتحكم التام به وربطه بـ Telegram Business!", newSubToken))
+				sendMenu(botToken, chatID, lang, tr(lang, "welcome"))
 			}
 			w.WriteHeader(http.StatusOK)
 			return
@@ -480,6 +489,39 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 		if msg.Text == "/id" {
 			sendMessage(botToken, chatID, fmt.Sprintf(tr(lang, "your_id_msg"), msg.From.ID))
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// معالجة حذف البوت عبر التوكن
+		if config.State == "waiting_delete_token" {
+			targetToken := strings.TrimSpace(msg.Text)
+			if err := deleteSubBotWebhook(targetToken); err != nil {
+				sendSubMenu(botToken, chatID, lang, fmt.Sprintf("❌ فشل إيقاف البوت:\n`%s`\nتأكد من إرسال توكن صحيح.", err.Error()))
+			} else {
+				config.State = ""
+				saveConfig(botToken, chatID, config, msgID)
+				sendMakerMenu(botToken, chatID, lang, "🗑️ **تم إيقاف وحذف البوت بنجاح!**\nلن يتلقى البوت أي تحديثات بعد الآن.")
+			}
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// معالجة إنشاء بوت جديد عبر التوكن
+		if config.State == "waiting_create_token" || (strings.Contains(msg.Text, ":") && len(msg.Text) > 20) {
+			newSubToken := strings.TrimSpace(msg.Text)
+			host := r.Host
+			if host == "" {
+				host = r.Header.Get("X-Forwarded-Host")
+			}
+
+			if err := setupSubBotWebhook(newSubToken, host); err != nil {
+				sendSubMenu(botToken, chatID, lang, fmt.Sprintf("❌ فشل تفعيل البوت الجديد:\n`%s`\nتأكد من صحة التوكن المأخوذ من @BotFather", err.Error()))
+			} else {
+				config.State = ""
+				saveConfig(botToken, chatID, config, msgID)
+				sendMakerMenu(botToken, chatID, lang, fmt.Sprintf("🎉 *تم إنشاء وبناء بوتك بنجاح!*\n\n🤖 **التوكن الخاص بك:**\n`%s`\n\nقم بالدخول إلى بوتك الجديد واضغط /start للبدء في الاستخدام والتحكم الكامل!", newSubToken))
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -577,7 +619,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. معالجة رسائل العملاء (Business Messages)
+	// 3. معالجة رسائل الأعمال
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 		cacheBusinessMessage(msg)
@@ -652,7 +694,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. معالجة إشعارات حذف الرسائل والوسائط
+	// 4. معالجة إشعارات المحذوفات
 	if update.DeletedBusinessMessages != nil {
 		dbm := update.DeletedBusinessMessages
 		adminID := getAdminIDFromBusinessConn(botToken, dbm.BusinessConnectionID)
@@ -673,7 +715,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 6. رصد تفعيل ربط حساب تجاري
+	// 5. رصد تفعيل ربط حساب تجاري
 	if update.BusinessConnection != nil {
 		bc := update.BusinessConnection
 		if bc.IsEnabled {
@@ -692,7 +734,21 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// --- دالة ربط البوت الفرعي الجديد بقاعدة فيرسل بدون تخزين ---
+// قائمة البوت الصانع الرئيسي
+func sendMakerMenu(token string, chatID int64, lang, text string) {
+	keyboard := map[string]interface{}{
+		"inline_keyboard": [][]map[string]string{
+			{{"text": tr(lang, "create_bot_btn"), "callback_data": "create_bot_prompt"}},
+			{{"text": tr(lang, "delete_bot_btn"), "callback_data": "delete_bot_prompt"}},
+			{{"text": tr(lang, "lang_ar_btn"), "callback_data": "lang_ar"}, {"text": tr(lang, "lang_en_btn"), "callback_data": "lang_en"}},
+		},
+	}
+	payload := map[string]interface{}{"chat_id": chatID, "text": text, "parse_mode": "Markdown", "reply_markup": keyboard}
+	b, _ := json.Marshal(payload)
+	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
+}
+
+// دالة تفعيل البوت الفرعي
 func setupSubBotWebhook(subBotToken, host string) error {
 	if host == "" {
 		return fmt.Errorf("تعذر تحديد رابط الخادم الفعلي")
@@ -703,7 +759,27 @@ func setupSubBotWebhook(subBotToken, host string) error {
 
 	resp, err := httpClient.Get(apiURL)
 	if err != nil {
-		return fmt.Errorf("خطأ اتصل بتليجرام: %v", err)
+		return fmt.Errorf("خطأ الاتصال بتليجرام: %v", err)
+	}
+	defer resp.Body.Close()
+
+	var res apiResult
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return fmt.Errorf("فشل فك تشفير استجابة تليجرام")
+	}
+
+	if !res.Ok {
+		return fmt.Errorf("%s", res.Description)
+	}
+	return nil
+}
+
+// دالة حذف وإيقاف البوت الفرعي
+func deleteSubBotWebhook(subBotToken string) error {
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteWebhook", subBotToken)
+	resp, err := httpClient.Get(apiURL)
+	if err != nil {
+		return fmt.Errorf("خطأ الاتصال بتليجرام: %v", err)
 	}
 	defer resp.Body.Close()
 
