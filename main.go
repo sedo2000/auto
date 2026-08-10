@@ -1,4 +1,4 @@
-package handler
+package main
 
 import (
 	"bytes"
@@ -27,56 +27,56 @@ var messageCache = sync.Map{}
 
 var translations = map[string]map[string]string{
 	"ar": {
-		"main_menu_title":     "القائمة الرئيسية 🤖:",
-		"welcome":             "أهلاً بك في لوحة تحكم البوت 🤖\nاختر من الأزرار أدناه للتحكم الكامل:",
-		"stop_btn":            "🛑 إيقاف الرد",
-		"start_btn":           "🟢 تشغيل الرد",
-		"edit_text_btn":       "📝 تعديل نص الرد",
-		"exclude_btn":         "👤 استثناء حساب",
-		"list_excluded_btn":   "📋 عرض المستثنين",
-		"clear_excluded_btn":  "🧹 مسح المستثنين",
-		"profile_menu_btn":    "🧑 إدارة الملف الشخصي",
-		"post_story_btn":      "📖 نشر قصة",
-		"lang_ar_btn":         "🇮🇶 العربية",
-		"lang_en_btn":         "🇺🇸 English",
-		"back_btn":            "🔙 رجوع",
-		"stopped_msg":         "🛑 تم إيقاف الرد التلقائي بنجاح.",
-		"started_msg":         "🟢 تم تشغيل الرد التلقائي بنجاح.",
-		"edit_text_prompt":    "📝 أرسل الآن نص الرد التلقائي الجديد:",
-		"saved_text_msg":      "✅ تم حفظ نص الرد التلقائي الجديد بنجاح!",
-		"exclude_prompt":      "👤 أرسل ايدي الحساب المراد استثناؤه الآن:",
-		"invalid_id_msg":      "❌ أرقام فقط! أرسل الايدي بشكل صحيح.",
-		"id_added_msg":        "✅ تم إضافة الايدي `%d` إلى قائمة الاستثناء.",
-		"list_excluded_title": "📋 **قائمة الحسابات المستثناة:**\n",
-		"no_excluded":         "لا يوجد حسابات مستثناة حالياً.",
+		"main_menu_title":      "القائمة الرئيسية 🤖:",
+		"welcome":              "أهلاً بك في لوحة تحكم البوت 🤖\nاختر من الأزرار أدناه للتحكم الكامل:",
+		"stop_btn":             "🛑 إيقاف الرد",
+		"start_btn":            "🟢 تشغيل الرد",
+		"edit_text_btn":        "📝 تعديل نص الرد",
+		"exclude_btn":          "👤 استثناء حساب",
+		"list_excluded_btn":    "📋 عرض المستثنين",
+		"clear_excluded_btn":   "🧹 مسح المستثنين",
+		"profile_menu_btn":     "🧑 إدارة الملف الشخصي",
+		"post_story_btn":       "📖 نشر قصة",
+		"lang_ar_btn":          "🇮🇶 العربية",
+		"lang_en_btn":          "🇺🇸 English",
+		"back_btn":             "🔙 رجوع",
+		"stopped_msg":          "🛑 تم إيقاف الرد التلقائي بنجاح.",
+		"started_msg":          "🟢 تم تشغيل الرد التلقائي بنجاح.",
+		"edit_text_prompt":     "📝 أرسل الآن نص الرد التلقائي الجديد:",
+		"saved_text_msg":       "✅ تم حفظ نص الرد التلقائي الجديد بنجاح!",
+		"exclude_prompt":       "👤 أرسل ايدي الحساب المراد استثناؤه الآن:",
+		"invalid_id_msg":       "❌ أرقام فقط! أرسل الايدي بشكل صحيح.",
+		"id_added_msg":         "✅ تم إضافة الايدي `%d` إلى قائمة الاستثناء.",
+		"list_excluded_title":  "📋 **قائمة الحسابات المستثناة:**\n",
+		"no_excluded":          "لا يوجد حسابات مستثناة حالياً.",
 		"cleared_excluded_msg": "🧹 تم مسح جميع الاستثناءات بنجاح.",
-		"your_id_msg":         "الايدي الخاص بك هو:\n`%d`",
+		"your_id_msg":          "الايدي الخاص بك هو:\n`%d`",
 	},
 	"en": {
-		"main_menu_title":     "Main Menu 🤖:",
-		"welcome":             "Welcome to the bot control panel 🤖",
-		"stop_btn":            "🛑 Stop Auto-Reply",
-		"start_btn":           "🟢 Start Auto-Reply",
-		"edit_text_btn":       "📝 Edit Reply Text",
-		"exclude_btn":         "👤 Exclude Account",
-		"list_excluded_btn":   "📋 View Excluded",
-		"clear_excluded_btn":  "🧹 Clear Excluded",
-		"profile_menu_btn":    "🧑 Manage Profile",
-		"post_story_btn":      "📖 Post Story",
-		"lang_ar_btn":         "🇮🇶 العربية",
-		"lang_en_btn":         "🇺🇸 English",
-		"back_btn":            "🔙 Back",
-		"stopped_msg":         "🛑 Auto-reply has been stopped.",
-		"started_msg":         "🟢 Auto-reply has been started.",
-		"edit_text_prompt":    "📝 Send the new auto-reply text now:",
-		"saved_text_msg":      "✅ New auto-reply text saved successfully!",
-		"exclude_prompt":      "👤 Send the account ID to exclude now:",
-		"invalid_id_msg":      "❌ Numbers only! Please send a valid ID.",
-		"id_added_msg":        "✅ ID `%d` added to the exclusion list.",
-		"list_excluded_title": "📋 **Excluded Accounts:**\n",
-		"no_excluded":         "No excluded accounts currently.",
+		"main_menu_title":      "Main Menu 🤖:",
+		"welcome":              "Welcome to the bot control panel 🤖",
+		"stop_btn":             "🛑 Stop Auto-Reply",
+		"start_btn":            "🟢 Start Auto-Reply",
+		"edit_text_btn":        "📝 Edit Reply Text",
+		"exclude_btn":          "👤 Exclude Account",
+		"list_excluded_btn":    "📋 View Excluded",
+		"clear_excluded_btn":   "🧹 Clear Excluded",
+		"profile_menu_btn":     "🧑 Manage Profile",
+		"post_story_btn":       "📖 Post Story",
+		"lang_ar_btn":          "🇮🇶 العربية",
+		"lang_en_btn":          "🇺🇸 English",
+		"back_btn":             "🔙 Back",
+		"stopped_msg":          "🛑 Auto-reply has been stopped.",
+		"started_msg":          "🟢 Auto-reply has been started.",
+		"edit_text_prompt":     "📝 Send the new auto-reply text now:",
+		"saved_text_msg":       "✅ New auto-reply text saved successfully!",
+		"exclude_prompt":       "👤 Send the account ID to exclude now:",
+		"invalid_id_msg":       "❌ Numbers only! Please send a valid ID.",
+		"id_added_msg":         "✅ ID `%d` added to the exclusion list.",
+		"list_excluded_title":  "📋 **Excluded Accounts:**\n",
+		"no_excluded":          "No excluded accounts currently.",
 		"cleared_excluded_msg": "🧹 All exclusions cleared successfully.",
-		"your_id_msg":         "Your ID is:\n`%d`",
+		"your_id_msg":          "Your ID is:\n`%d`",
 	},
 }
 
@@ -436,4 +436,13 @@ func answerCallback(token, callbackID string) {
 	payload := map[string]string{"callback_query_id": callbackID}
 	b, _ := json.Marshal(payload)
 	httpClient.Post("https://api.telegram.org/bot"+token+"/answerCallbackQuery", "application/json", bytes.NewBuffer(b))
+}
+
+func main() {
+	http.HandleFunc("/", Handler)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	http.ListenAndServe(":"+port, nil)
 }
