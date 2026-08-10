@@ -318,10 +318,13 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	mainToken := os.Getenv("TELEGRAM_BOT_TOKEN")
 	tokenQuery := r.URL.Query().Get("token")
 
+	// إذا لم يتضمن الرابط كويري token، فهذا هو البوت الرئيسي الصانع قطعاً
 	isMainMakerBot := false
 	botToken := tokenQuery
-	if botToken == "" || botToken == mainToken {
+	if tokenQuery == "" {
 		botToken = mainToken
+		isMainMakerBot = true
+	} else if tokenQuery == mainToken {
 		isMainMakerBot = true
 	}
 
@@ -331,7 +334,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. معالجة الأزرار الشفافة
+	// 1. معالجة الضغط على الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
@@ -469,7 +472,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. معالجة الرسائل القادمة
+	// 2. معالجة الرسائل
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -493,7 +496,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// معالجة حذف البوت عبر التوكن
 		if config.State == "waiting_delete_token" {
 			targetToken := strings.TrimSpace(msg.Text)
 			if err := deleteSubBotWebhook(targetToken); err != nil {
@@ -507,8 +509,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// معالجة إنشاء بوت جديد عبر التوكن
-		if config.State == "waiting_create_token" || (strings.Contains(msg.Text, ":") && len(msg.Text) > 20) {
+		if config.State == "waiting_create_token" || (isMainMakerBot && strings.Contains(msg.Text, ":") && len(msg.Text) > 20) {
 			newSubToken := strings.TrimSpace(msg.Text)
 			host := r.Host
 			if host == "" {
@@ -734,7 +735,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// قائمة البوت الصانع الرئيسي
 func sendMakerMenu(token string, chatID int64, lang, text string) {
 	keyboard := map[string]interface{}{
 		"inline_keyboard": [][]map[string]string{
@@ -748,7 +748,6 @@ func sendMakerMenu(token string, chatID int64, lang, text string) {
 	httpClient.Post("https://api.telegram.org/bot"+token+"/sendMessage", "application/json", bytes.NewBuffer(b))
 }
 
-// دالة تفعيل البوت الفرعي
 func setupSubBotWebhook(subBotToken, host string) error {
 	if host == "" {
 		return fmt.Errorf("تعذر تحديد رابط الخادم الفعلي")
@@ -774,7 +773,6 @@ func setupSubBotWebhook(subBotToken, host string) error {
 	return nil
 }
 
-// دالة حذف وإيقاف البوت الفرعي
 func deleteSubBotWebhook(subBotToken string) error {
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/deleteWebhook", subBotToken)
 	resp, err := httpClient.Get(apiURL)
@@ -1213,7 +1211,7 @@ func callBusinessAPI(token, method string, payload map[string]interface{}) error
 	var res apiResult
 	json.NewDecoder(resp.Body).Decode(&res)
 	if !res.Ok {
-		return fmt.Errorf("%s", res.Description)
+		return fmt.Sprintf("%s", res.Description)
 	}
 	return nil
 }
