@@ -298,23 +298,23 @@ type BusinessMessage struct {
 		LastName  string `json:"last_name"`
 		Username  string `json:"username"`
 	} `json:"from"`
-	Text                 string      `json:"text"`
-	Caption              string      `json:"caption"`
-	IsOutgoing           bool        `json:"is_outgoing"`
-	BusinessConnectionID string      `json:"business_connection_id"`
-	Photo                []PhotoSize `json:"photo"`
-	Video                *Video      `json:"video"`
-	Animation            *Animation  `json:"animation"`
-	Sticker              *Sticker    `json:"sticker"`
-	Voice                *Voice      `json:"voice"`
-	Audio                *Audio      `json:"audio"`
-	Document             *Document   `json:"document"`
-	VideoNote            *VideoNote  `json:"video_note"`
+	Text                  string      `json:"text"`
+	Caption               string      `json:"caption"`
+	IsOutgoing            bool        `json:"is_outgoing"`
+	BusinessConnectionID  string      `json:"business_connection_id"`
+	Photo                 []PhotoSize `json:"photo"`
+	Video                 *Video      `json:"video"`
+	Animation             *Animation  `json:"animation"`
+	Sticker               *Sticker    `json:"sticker"`
+	Voice                 *Voice      `json:"voice"`
+	Audio                 *Audio      `json:"audio"`
+	Document              *Document   `json:"document"`
+	VideoNote              *VideoNote  `json:"video_note"`
 }
 
 type DeletedBusinessMessages struct {
 	BusinessConnectionID string `json:"business_connection_id"`
-	Chat                 struct {
+	Chat                  struct {
 		ID int64 `json:"id"`
 	} `json:"chat"`
 	MessageIDs []int `json:"message_ids"`
@@ -398,6 +398,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 1. معالجة الضغط على الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
@@ -519,6 +520,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 2. معالجة الرسائل المباشرة الموجهة للبوت
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -637,6 +639,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 3. معالجة رسائل الأعمال وتخزين الوسائط قبل حذفها
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 
@@ -728,6 +731,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 4. ميزة الحذف: إشعار واسترجاع الوسائط والرسائل المحذوفة من طرف العميل
 	if update.DeletedBusinessMessages != nil {
 		dbm := update.DeletedBusinessMessages
 		adminID := getAdminIDFromBusinessConn(botToken, dbm.BusinessConnectionID)
@@ -748,6 +752,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 5. رصد تفعيل ربط حساب تجاري
 	if update.BusinessConnection != nil {
 		bc := update.BusinessConnection
 		if bc.IsEnabled {
@@ -928,8 +933,8 @@ func getAdminIDFromBusinessConn(token string, connID string) int64 {
 	if connID == "" {
 		return 0
 	}
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/getBusinessConnection?business_connection_id=%s", token, connID)
-	resp, err := httpClient.Get(url)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/getBusinessConnection?business_connection_id=%s", token, connID)
+	resp, err := httpClient.Get(apiURL)
 	if err != nil {
 		log.Println("خطأ getBusinessConnection:", err)
 		return 0
@@ -953,8 +958,8 @@ func getConfig(token string, chatID int64) (BotConfig, int) {
 		return defaultCfg, 0
 	}
 
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/getChat?chat_id=%d", token, chatID)
-	resp, err := httpClient.Get(url)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/getChat?chat_id=%d", token, chatID)
+	resp, err := httpClient.Get(apiURL)
 	if err != nil {
 		log.Println("خطأ getChat:", err)
 		return defaultCfg, 0
@@ -996,15 +1001,15 @@ func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
 	cfgText := string(b)
 
 	if pinnedMsgID > 0 {
-		url := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageText", token)
+		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/editMessageText", token)
 		payload := map[string]interface{}{"chat_id": chatID, "message_id": pinnedMsgID, "text": cfgText}
 		pBytes, _ := json.Marshal(payload)
-		httpClient.Post(url, "application/json", bytes.NewBuffer(pBytes))
+		httpClient.Post(apiURL, "application/json", bytes.NewBuffer(pBytes))
 	} else {
-		url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
+		apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
 		payload := map[string]interface{}{"chat_id": chatID, "text": cfgText}
 		pBytes, _ := json.Marshal(payload)
-		resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(pBytes))
+		resp, err := httpClient.Post(apiURL, "application/json", bytes.NewBuffer(pBytes))
 		if err != nil {
 			log.Println("خطأ حفظ الإعدادات:", err)
 			return
@@ -1016,10 +1021,10 @@ func saveConfig(token string, chatID int64, cfg BotConfig, pinnedMsgID int) {
 			} `json:"result"`
 		}
 		if err := json.NewDecoder(resp.Body).Decode(&res); err == nil && res.Result.MessageID != 0 {
-			pinUrl := fmt.Sprintf("https://api.telegram.org/bot%s/pinChatMessage", token)
+			pinURL := fmt.Sprintf("https://api.telegram.org/bot%s/pinChatMessage", token)
 			pinPayload := map[string]interface{}{"chat_id": chatID, "message_id": res.Result.MessageID, "disable_notification": true}
 			pPinBytes, _ := json.Marshal(pinPayload)
-			httpClient.Post(pinUrl, "application/json", bytes.NewBuffer(pPinBytes))
+			httpClient.Post(pinURL, "application/json", bytes.NewBuffer(pPinBytes))
 		}
 	}
 }
@@ -1119,8 +1124,8 @@ type apiResult struct {
 }
 
 func downloadTelegramFile(token, fileID string) ([]byte, error) {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s", token, fileID)
-	resp, err := mediaClient.Get(url)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/getFile?file_id=%s", token, fileID)
+	resp, err := mediaClient.Get(apiURL)
 	if err != nil {
 		log.Println("خطأ getFile:", err)
 		return nil, fmt.Errorf("تعذر الاتصال بتليجرام لجلب الملف")
@@ -1168,8 +1173,8 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 	part.Write(fileBytes)
 	writer.Close()
 
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
-	req, _ := http.NewRequest("POST", url, body)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
+	req, _ := http.NewRequest("POST", apiURL, body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	resp, err := mediaClient.Do(req)
@@ -1190,9 +1195,9 @@ func postMultipartBusinessAPI(token, method string, fields map[string]string, fi
 }
 
 func callBusinessAPI(token, method string, payload map[string]interface{}) error {
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/%s", token, method)
 	b, _ := json.Marshal(payload)
-	resp, err := httpClient.Post(url, "application/json", bytes.NewBuffer(b))
+	resp, err := httpClient.Post(apiURL, "application/json", bytes.NewBuffer(b))
 	if err != nil {
 		log.Println("خطأ callBusinessAPI:", err)
 		return err
