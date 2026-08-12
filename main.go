@@ -398,7 +398,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 1. معالجة الضغط على الأزرار الشفافة
 	if update.CallbackQuery != nil {
 		cb := update.CallbackQuery
 		answerCallback(botToken, cb.ID)
@@ -520,7 +519,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 2. معالجة الرسائل المباشرة الموجهة للبوت
 	if update.Message != nil {
 		msg := update.Message
 		chatID := msg.Chat.ID
@@ -639,7 +637,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. معالجة رسائل الأعمال وتخزين الوسائط قبل حذفها
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 
@@ -731,7 +728,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. ميزة الحذف: إشعار واسترجاع الوسائط والرسائل المحذوفة من طرف العميل
 	if update.DeletedBusinessMessages != nil {
 		dbm := update.DeletedBusinessMessages
 		adminID := getAdminIDFromBusinessConn(botToken, dbm.BusinessConnectionID)
@@ -752,7 +748,6 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 5. رصد تفعيل ربط حساب تجاري
 	if update.BusinessConnection != nil {
 		bc := update.BusinessConnection
 		if bc.IsEnabled {
