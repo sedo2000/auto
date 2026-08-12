@@ -639,16 +639,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 3. معالجة رسائل الأعمال (Business Messages) وتخزين الوسائط للرسائل المحذوفة وللوسائط ذاتية التدمير
+	// 3. معالجة رسائل الأعمال وتخزين الوسائط قبل حذفها
 	if update.BusinessMessage != nil {
 		msg := update.BusinessMessage
 
-		// تخزين الرسالة في الكاش لاسترجاعها فور الحذف
 		cacheBusinessMessage(msg)
 
 		adminID := getAdminIDFromBusinessConn(botToken, msg.BusinessConnectionID)
 
-		// التقاط فور وحفظ الوسائط ذاتية التدمير للعملاء وإعادة إرسالها للأدمن
 		if !msg.IsOutgoing && adminID != 0 && (len(msg.Photo) > 0 || msg.Video != nil) {
 			customerName := buildDisplayName(msg.From.FirstName, msg.From.LastName, msg.From.Username)
 			backupCaption := fmt.Sprintf(tr("ar", "ttl_media_alert"), customerName, msg.From.ID)
@@ -733,7 +731,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 4. ميزة الحذف: رصد وإشعار إرسال الرسائل والوسائط التي تم حذفها من الطرف الآخر
+	// 4. ميزة الحذف: إشعار واسترجاع الوسائط والرسائل المحذوفة من طرف العميل
 	if update.DeletedBusinessMessages != nil {
 		dbm := update.DeletedBusinessMessages
 		adminID := getAdminIDFromBusinessConn(botToken, dbm.BusinessConnectionID)
@@ -1211,7 +1209,7 @@ func callBusinessAPI(token, method string, payload map[string]interface{}) error
 		return err
 	}
 	if !res.Ok {
-		return fmt.Sprintf("%s", res.Description)
+		return fmt.Errorf("%s", res.Description)
 	}
 	return nil
 }
